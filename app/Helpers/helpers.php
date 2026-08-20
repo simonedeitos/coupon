@@ -93,7 +93,23 @@ function url(string $path = ''): string
 
 function asset(string $path): string
 {
-    return Url::asset($path);
+    $basePath = (string) config('app.asset_url', '/assets');
+    return rtrim($basePath, '/') . '/' . ltrim($path, '/');
+}
+
+function css(string $file): string
+{
+    return asset('css/' . $file);
+}
+
+function js(string $file): string
+{
+    return asset('js/' . $file);
+}
+
+function image(string $file): string
+{
+    return asset('images/' . $file);
 }
 
 function csrf_token(): string
@@ -106,7 +122,7 @@ function csrf_field(): string
     return '<input type="hidden" name="_token" value="' . e(csrf_token()) . '">';
 }
 
-function response_view(string $view, array $data = [], string $layout = 'app', int $status = 200): array
+function response_view(string $view, array $data = [], string $layout = 'frontend', int $status = 200): array
 {
     return Response::html(app('view')->render($view, $data, $layout), $status);
 }

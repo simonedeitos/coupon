@@ -6,6 +6,13 @@ return [
     'name' => 'Couponami',
     'env' => getenv('APP_ENV') ?: 'production',
     'base_url' => rtrim(getenv('APP_URL') ?: 'https://couponami.it', '/'),
+    'app_name' => 'Couponami',
+    'app_description' => 'Trova codici sconto, coupon e offerte online',
+    'app_locale' => 'it_IT',
+    'asset_url' => '/assets',
+    'css_path' => '/assets/css',
+    'js_path' => '/assets/js',
+    'images_path' => '/assets/images',
     'timezone' => 'Europe/Rome',
     'contact_email' => getenv('CONTACT_EMAIL') ?: 'info@couponami.it',
     'admin_users' => [[
