@@ -1,1 +1,0 @@
-<section class="page-intro"><div class="container"><h1>Richiesta non valida</h1><p>Controlla i dati inviati e riprova.</p><a class="btn" href="<?php echo e(url('/')); ?>">Torna alla home</a></div></section>

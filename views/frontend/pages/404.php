@@ -1,1 +1,0 @@
-<section class="page-intro"><div class="container"><h1>Pagina non trovata</h1><p>Il contenuto richiesto non è disponibile oppure è stato spostato.</p><a class="btn" href="<?php echo e(url('/')); ?>">Torna alla home</a></div></section>

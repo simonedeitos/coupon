@@ -1,1 +1,0 @@
-<aside class="newsletter"><h3>Vuoi risparmiare di più?</h3><p>Ricevi una selezione delle migliori offerte direttamente nella tua email.</p><form action="<?php echo e(url('/newsletter')); ?>" method="post"><?php echo csrf_field(); ?><input type="email" name="email" placeholder="La tua email" required><button type="submit">Iscrivimi gratis</button></form></aside>

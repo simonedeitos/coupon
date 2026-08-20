@@ -1,3 +1,0 @@
-<?php echo app('view')->partial('layouts/partials/breadcrumbs', ['breadcrumbs' => [['label' => 'Coupon', 'url' => '/coupon']]]); ?>
-<section class="page-intro"><div class="container"><h1>Tutti i coupon</h1><p>Filtra tra codici sconto, offerte e promozioni recenti.</p><div class="hero-search-links"><a class="pill" href="<?php echo e(url('/coupon?tipo=CODICE')); ?>">Solo codici</a><a class="pill" href="<?php echo e(url('/coupon?tipo=OFFERTA')); ?>">Solo offerte</a><a class="pill" href="<?php echo e(url('/coupon?ordine=recenti')); ?>">Più recenti</a></div></div></section>
-<section><div class="container"><?php echo app('view')->partial('frontend/partials/coupon-grid', ['offers' => $offers]); ?></div></section>
