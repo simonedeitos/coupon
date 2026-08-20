@@ -49,11 +49,11 @@ if (! isset($GLOBALS['couponami'])) {
 
     $cache = new CacheService(BASE_PATH . '/storage');
     $csrf = new CsrfService();
-    $auth = new AuthService($config['app']['admin_users'], $cache);
+    $db = Connection::get($config['database']);
+    $auth = new AuthService($config['app']['admin_users'], $cache, $db);
     $analytics = new AnalyticsService($cache);
     $seo = new SeoService($config['seo'], $config['app']);
     $schema = new SchemaService($config['app'], $config['seo']);
-    $db = Connection::get($config['database']);
     $categories = new CategoryRepository($cache, $config['app']['seed']['categories'], $db);
     $stores = new StoreRepository($cache, $config['app']['seed']['stores'], $db);
     $offers = new OfferRepository($cache, $config['app']['seed']['offers'], $db);
