@@ -41,6 +41,7 @@ final class CategoryRepository
                 ], $rows);
             } catch (\Throwable $e) {
                 error_log('CategoryRepository::all failed: ' . $e->getMessage());
+                return [];
             }
         }
 

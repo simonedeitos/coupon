@@ -44,6 +44,7 @@ final class StoreRepository
                 ], $rows);
             } catch (\Throwable $e) {
                 error_log('StoreRepository::all failed: ' . $e->getMessage());
+                return [];
             }
         }
 

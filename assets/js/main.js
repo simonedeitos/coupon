@@ -5,18 +5,23 @@
     return;
   }
 
+  let autoCloseTimer = null;
+
   const closeModal = () => {
+    clearTimeout(autoCloseTimer);
     modal.hidden = true;
     document.body.classList.remove('modal-open');
   };
 
   const openModal = async (code) => {
+    clearTimeout(autoCloseTimer);
     codeTarget.textContent = code;
     modal.hidden = false;
     document.body.classList.add('modal-open');
     if (navigator.clipboard?.writeText) {
       try { await navigator.clipboard.writeText(code); } catch (error) {}
     }
+    autoCloseTimer = setTimeout(closeModal, 2000);
   };
 
   document.addEventListener('click', async (event) => {
