@@ -134,3 +134,46 @@ function redirect(string $path, int $status = 302): array
 {
     return Response::redirect(Url::to($path), $status);
 }
+
+/**
+ * Scrive un'azione nell'audit log (tabella DB + file flat come fallback).
+ */
+function audit_log(string $action, string $entityType = '', ?int $entityId = null, array $payload = []): void
+{
+    $user = app('auth')?->user();
+    $userId = $user['id'] ?? null;
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+    $logEntry = [
+        'action' => $action,
+        'actor' => $user['username'] ?? 'guest',
+        'entity_type' => $entityType,
+        'entity_id' => $entityId,
+        'ip' => $ip,
+        'payload' => $payload,
+        'created_at' => date('c'),
+    ];
+
+    // Scrivi su DB
+    $db = app('db');
+    if ($db !== null) {
+        try {
+            $stmt = $db->prepare(
+                'INSERT INTO audit_logs (user_id, action, entity_type, entity_id, ip_address, payload)
+                 VALUES (?, ?, ?, ?, INET6_ATON(?), ?)'
+            );
+            $stmt->execute([
+                $userId,
+                $action,
+                $entityType ?: null,
+                $entityId,
+                $ip ?: null,
+                json_encode($payload, JSON_UNESCAPED_UNICODE),
+            ]);
+        } catch (\Throwable $e) {
+            error_log('audit_log DB failed: ' . $e->getMessage());
+        }
+    }
+
+    // Mantieni anche il file flat per retrocompatibilità
+    app('cache')?->appendJsonLine('logs', 'audit.log', $logEntry);
+}

@@ -69,19 +69,7 @@ final class StoreRepository
             return [];
         }
         try {
-            $stmt = $this->db->prepare(
-                'SELECT s.id, s.slug, s.name, s.description, s.website_url AS website,
-                        COUNT(o.id) AS offers_count
-                 FROM stores s
-                 LEFT JOIN offers o ON o.store_id = s.id AND o.status = \'ACTIVE\'
-                 WHERE s.is_active = 1 AND s.is_featured = 1
-                 GROUP BY s.id
-                 ORDER BY offers_count DESC, s.name ASC
-                 LIMIT ?',
-            );
-            $stmt->execute([$limit]);
-            $rows = $stmt->fetchAll();
-            return array_map(static fn (array $r): array => [
+            $mapRow = static fn (array $r): array => [
                 'id' => (int) $r['id'],
                 'slug' => $r['slug'],
                 'name' => $r['name'],
@@ -90,7 +78,41 @@ final class StoreRepository
                 'website' => $r['website'] ?? '',
                 'offers_count' => (int) $r['offers_count'],
                 'featured' => true,
-            ], $rows);
+            ];
+
+            // Prima prova i record con is_featured = 1 (selezione manuale).
+            // Se non ce ne sono, cade back automaticamente sui più cliccati (popolarità reale).
+            $stmt = $this->db->prepare(
+                'SELECT s.id, s.slug, s.name, s.description, s.website_url AS website,
+                        s.click_count,
+                        COUNT(o.id) AS offers_count
+                 FROM stores s
+                 LEFT JOIN offers o ON o.store_id = s.id AND o.status = \'ACTIVE\'
+                 WHERE s.is_active = 1 AND s.is_featured = 1
+                 GROUP BY s.id
+                 ORDER BY s.click_count DESC, offers_count DESC, s.name ASC
+                 LIMIT ?',
+            );
+            $stmt->execute([$limit]);
+            $rows = $stmt->fetchAll();
+            if ($rows) {
+                return array_map($mapRow, $rows);
+            }
+
+            // Fallback: top N per click reali
+            $stmt = $this->db->prepare(
+                'SELECT s.id, s.slug, s.name, s.description, s.website_url AS website,
+                        s.click_count,
+                        COUNT(o.id) AS offers_count
+                 FROM stores s
+                 LEFT JOIN offers o ON o.store_id = s.id AND o.status = \'ACTIVE\'
+                 WHERE s.is_active = 1
+                 GROUP BY s.id
+                 ORDER BY s.click_count DESC, offers_count DESC, s.name ASC
+                 LIMIT ?',
+            );
+            $stmt->execute([$limit]);
+            return array_map($mapRow, $stmt->fetchAll());
         } catch (\Throwable $e) {
             error_log('StoreRepository::featured failed: ' . $e->getMessage());
             return [];

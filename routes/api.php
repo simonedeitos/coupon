@@ -8,4 +8,5 @@ return [
     ['method' => 'GET', 'pattern' => '/api/health', 'handler' => [ApiController::class, 'health']],
     ['method' => 'GET', 'pattern' => '/api/offers', 'handler' => [ApiController::class, 'offers']],
     ['method' => 'GET', 'pattern' => '/api/search', 'handler' => [ApiController::class, 'search']],
+    ['method' => 'GET', 'pattern' => '/api/deal-of-the-day', 'handler' => [ApiController::class, 'dealOfTheDay']],
 ];

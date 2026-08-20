@@ -4,23 +4,71 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use PDO;
+
 final class AnalyticsService
 {
-    public function __construct(private readonly CacheService $cache)
-    {
+    public function __construct(
+        private readonly CacheService $cache,
+        private readonly ?PDO $db = null,
+    ) {
     }
 
     public function logClick(array $offer, string $storeName): void
     {
-        $date = date('Y-m-d');
         $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
         $anonymizedIp = preg_replace('/\d+$/', '0', $ip) ?: '0.0.0.0';
+        $userAgent = (string) ($_SERVER['HTTP_USER_AGENT'] ?? '');
+        $referer = substr((string) ($_SERVER['HTTP_REFERER'] ?? ''), 0, 255);
+        $device = str_contains(strtolower($userAgent), 'mobile') ? 'mobile' : 'desktop';
+        $offerId = (int) $offer['id'];
+        $storeId = (int) ($offer['store_id'] ?? 0);
+
+        // Scrivi sul DB (tabella clicks) e aggiorna i contatori aggregati
+        if ($this->db !== null) {
+            try {
+                $stmt = $this->db->prepare(
+                    'INSERT INTO clicks (offer_id, store_id, referer, device_type, anonymized_ip, user_agent_hash)
+                     VALUES (?, ?, ?, ?, INET6_ATON(?), ?)'
+                );
+                $stmt->execute([
+                    $offerId,
+                    $storeId ?: null,
+                    $referer ?: null,
+                    $device,
+                    $anonymizedIp,
+                    hash('sha256', $userAgent),
+                ]);
+
+                // Incrementa click_count aggregato sull'offerta
+                $this->db->prepare('UPDATE offers SET click_count = click_count + 1 WHERE id = ?')
+                    ->execute([$offerId]);
+
+                // Incrementa click_count aggregato sullo store
+                if ($storeId > 0) {
+                    $this->db->prepare('UPDATE stores SET click_count = click_count + 1 WHERE id = ?')
+                        ->execute([$storeId]);
+                }
+
+                // Aggiorna il riepilogo giornaliero (tabella click_analytics_daily)
+                $this->db->prepare(
+                    'INSERT INTO click_analytics_daily (date, offer_id, store_id, click_count)
+                     VALUES (CURDATE(), ?, ?, 1)
+                     ON DUPLICATE KEY UPDATE click_count = click_count + 1'
+                )->execute([$offerId, $storeId ?: null]);
+            } catch (\Throwable $e) {
+                error_log('AnalyticsService::logClick DB failed: ' . $e->getMessage());
+            }
+        }
+
+        // Mantieni anche il log flat per retrocompatibilità / export CSV
+        $date = date('Y-m-d');
         $record = [
-            'offer_id' => $offer['id'],
+            'offer_id' => $offerId,
             'offer_title' => $offer['title'],
             'store_name' => $storeName,
-            'referer' => substr((string) ($_SERVER['HTTP_REFERER'] ?? ''), 0, 190),
-            'device' => str_contains(strtolower((string) ($_SERVER['HTTP_USER_AGENT'] ?? '')), 'mobile') ? 'mobile' : 'desktop',
+            'referer' => $referer,
+            'device' => $device,
             'ip' => $anonymizedIp,
             'created_at' => date('c'),
         ];
@@ -36,6 +84,33 @@ final class AnalyticsService
 
     public function clickSeries(int $days = 30): array
     {
+        // Preferisci i dati DB se disponibili
+        if ($this->db !== null) {
+            try {
+                $stmt = $this->db->prepare(
+                    "SELECT DATE(created_at) AS date, COUNT(*) AS clicks
+                     FROM clicks
+                     WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+                     GROUP BY DATE(created_at)
+                     ORDER BY date ASC"
+                );
+                $stmt->execute([$days]);
+                $dbRows = [];
+                foreach ($stmt->fetchAll() as $row) {
+                    $dbRows[$row['date']] = (int) $row['clicks'];
+                }
+                $series = [];
+                for ($i = $days - 1; $i >= 0; $i--) {
+                    $date = date('Y-m-d', strtotime('-' . $i . ' days'));
+                    $series[] = ['date' => $date, 'clicks' => $dbRows[$date] ?? 0];
+                }
+                return $series;
+            } catch (\Throwable $e) {
+                error_log('AnalyticsService::clickSeries DB failed: ' . $e->getMessage());
+            }
+        }
+
+        // Fallback su cache file
         $daily = $this->cache->collection('click_daily', []);
         $series = [];
         for ($i = $days - 1; $i >= 0; $i--) {

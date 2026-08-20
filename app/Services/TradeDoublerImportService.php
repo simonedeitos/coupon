@@ -186,11 +186,14 @@ final class TradeDoublerImportService
                 $description = (string) self::field($item, ['description', 'shortDescription'], '');
                 $code = (string) self::field($item, ['code', 'voucherCode'], '');
                 $discountRaw = self::field($item, ['discount', 'discountAmount', 'value', 'discountValue', 'discountText'], null);
-                $discount = self::formatDiscount($discountRaw);
+                $discountType = self::detectDiscountType($item, $discountRaw);
+                $discount = self::formatDiscountValue($discountRaw, $discountType);
                 $url = (string) self::field($item, ['trackingUrl', 'clickUrl', 'deepLink', 'link', 'url'], '');
                 $startDate = self::toMysqlDate(self::field($item, ['startDate', 'validFrom', 'start']));
                 $endDate = self::toMysqlDate(self::field($item, ['endDate', 'validTo', 'end']));
                 $categoryName = (string) self::field($item, ['categoryName', 'category'], '');
+                $logoUrl = (string) self::field($item, ['logoUrl', 'imageUrl', 'logo', 'programLogoUrl'], '');
+                $storeDescription = (string) self::field($item, ['programDescription', 'advertiserDescription', 'description'], '');
 
                 if ($externalId === '' || $url === '') {
                     $errors++;
@@ -209,7 +212,7 @@ final class TradeDoublerImportService
                     continue;
                 }
 
-                $storeId = $this->ensureStore($programName);
+                $storeId = $this->ensureStore($programName, $storeDescription, $logoUrl, $categoryName);
                 $programDbId = $this->ensureProgram($networkId, $storeId, $programId, $programName);
                 $categoryId = $categoryName !== '' ? $this->ensureCategory($categoryName) : null;
 
@@ -218,8 +221,8 @@ final class TradeDoublerImportService
 
                 $insertOffer = $this->db->prepare(
                     'INSERT INTO offers
-                        (store_id, category_id, title, slug, description, offer_type, coupon_code, affiliate_url, external_id, dedupe_hash, status, badge, starts_at, expires_at, is_featured)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'ACTIVE\', ?, ?, ?, ?)'
+                        (store_id, category_id, title, slug, description, offer_type, coupon_code, affiliate_url, external_id, dedupe_hash, status, badge, discount_type, starts_at, expires_at, is_featured)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'ACTIVE\', ?, ?, ?, ?, ?)'
                 );
                 $insertOffer->execute([
                     $storeId,
@@ -233,6 +236,7 @@ final class TradeDoublerImportService
                     $externalId,
                     $hash,
                     $discount,
+                    $discountType,
                     $startDate,
                     $endDate,
                     $markFeatured ? 1 : 0,
@@ -280,21 +284,113 @@ final class TradeDoublerImportService
         return (int) $this->db->lastInsertId();
     }
 
-    private function ensureStore(string $name): int
+    private function ensureStore(string $name, string $description = '', string $logoUrl = '', string $categoryName = ''): int
     {
         $slug = Str::slug($name);
         $stmt = $this->db->prepare('SELECT id FROM stores WHERE slug = ? LIMIT 1');
         $stmt->execute([$slug]);
         $row = $stmt->fetch();
         if ($row) {
-            return (int) $row['id'];
+            $storeId = (int) $row['id'];
+            // Aggiorna solo i campi attualmente NULL o vuoti (non sovrascrivere dati manualmente curati).
+            $updates = [];
+            $params = [];
+            if ($description !== '') {
+                $updates[] = 'description = IF(description IS NULL OR description = \'\', ?, description)';
+                $params[] = $description;
+            }
+            if ($logoUrl !== '') {
+                $updates[] = 'logo_path = IF(logo_path IS NULL OR logo_path = \'\', ?, logo_path)';
+                $params[] = $logoUrl;
+            }
+            if ($categoryName !== '') {
+                $catId = $this->ensureCategory($categoryName);
+                $updates[] = 'category_id = IF(category_id IS NULL, ?, category_id)';
+                $params[] = $catId;
+            }
+            if ($updates !== []) {
+                $params[] = $storeId;
+                $this->db->prepare('UPDATE stores SET ' . implode(', ', $updates) . ' WHERE id = ?')->execute($params);
+            }
+            return $storeId;
         }
 
+        $categoryId = $categoryName !== '' ? $this->ensureCategory($categoryName) : null;
+
         $insert = $this->db->prepare(
-            'INSERT INTO stores (name, slug, is_active) VALUES (?, ?, 1)'
+            'INSERT INTO stores (name, slug, description, logo_path, category_id, is_active) VALUES (?, ?, ?, ?, ?, 1)'
         );
-        $insert->execute([$name, $slug]);
+        $insert->execute([
+            $name,
+            $slug,
+            $description !== '' ? $description : null,
+            $logoUrl !== '' ? $logoUrl : null,
+            $categoryId,
+        ]);
         return (int) $this->db->lastInsertId();
+    }
+
+    /**
+     * Detecta il tipo di sconto dall'item del feed.
+     * Restituisce 'PERCENT' o 'AMOUNT'.
+     */
+    private static function detectDiscountType(array $item, $raw): string
+    {
+        // Se il feed fornisce esplicitamente il tipo
+        $type = strtoupper((string) self::field($item, ['discountType', 'valueType', 'type', 'discountUnit'], ''));
+        if (in_array($type, ['PERCENT', 'PERCENTAGE', '%'], true)) {
+            return 'PERCENT';
+        }
+        if (in_array($type, ['AMOUNT', 'FIXED', 'EUR', 'EURO', '€'], true)) {
+            return 'AMOUNT';
+        }
+
+        // Controlla se il valore raw contiene simboli espliciti
+        $rawStr = (string) $raw;
+        if (str_contains($rawStr, '€') || str_contains($rawStr, 'EUR')) {
+            return 'AMOUNT';
+        }
+        if (str_contains($rawStr, '%')) {
+            return 'PERCENT';
+        }
+
+        // Euristico: se è un numero e supera 90, è quasi certamente un importo fisso, non una percentuale
+        if (is_numeric($raw)) {
+            $num = (float) $raw;
+            if ($num > 90) {
+                return 'AMOUNT';
+            }
+        }
+
+        return 'PERCENT';
+    }
+
+    private static function formatDiscountValue($raw, string $discountType): ?string
+    {
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+        if (is_numeric($raw)) {
+            $num = (float) $raw;
+            if ($num <= 0) {
+                return null;
+            }
+            if ($num > 0 && $num <= 1 && $discountType === 'PERCENT') {
+                $percent = round($num * 100, 2);
+                $formatted = rtrim(number_format($percent, 2, '.', ''), '0');
+                $formatted = rtrim($formatted, '.');
+                return $formatted . '%';
+            }
+            if ($discountType === 'AMOUNT') {
+                $formatted = rtrim(number_format($num, 2, '.', ''), '0');
+                return rtrim($formatted, '.');
+            }
+            $formatted = rtrim(number_format($num, 2, '.', ''), '0');
+            return rtrim($formatted, '.') . '%';
+        }
+        // Rimuovi simboli per estrarre il valore numerico
+        $clean = trim(str_replace(['€', 'EUR', '%', ' '], '', (string) $raw));
+        return $clean !== '' ? (string) $raw : null;
     }
 
     /**

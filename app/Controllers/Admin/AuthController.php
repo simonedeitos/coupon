@@ -33,7 +33,7 @@ final class AuthController
         }
         app('auth')->clearRateLimit($key);
         clear_old_input();
-        app('cache')->appendJsonLine('logs', 'audit.log', ['action' => 'login', 'actor' => $username, 'created_at' => date('c')]);
+        audit_log('login', 'users', null, ['username' => $username]);
         flash('success', 'Accesso effettuato con successo.');
         return redirect('/admin/dashboard');
     }
@@ -41,7 +41,7 @@ final class AuthController
     public function logout(): array
     {
         $user = app('auth')->user();
-        app('cache')->appendJsonLine('logs', 'audit.log', ['action' => 'logout', 'actor' => $user['username'] ?? 'guest', 'created_at' => date('c')]);
+        audit_log('logout', 'users', null, ['username' => $user['username'] ?? 'guest']);
         app('auth')->logout();
         flash('success', 'Sessione terminata.');
         return redirect('/admin');

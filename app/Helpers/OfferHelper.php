@@ -8,14 +8,30 @@ final class OfferHelper
 {
     public static function formatDiscount(array $offer): string
     {
-        $discount = (string) ($offer['discount'] ?? '');
-        if ($discount !== '' && $discount !== '0') {
-            return $discount;
+        $discountType = strtoupper((string) ($offer['discount_type'] ?? 'PERCENT'));
+        $badge = (string) ($offer['badge'] ?? $offer['discount'] ?? '');
+
+        if ($badge === '' || $badge === '0' || $badge === '0%' || $badge === 'null') {
+            return '';
         }
-        if (($offer['type'] ?? '') === 'OFFERTA') {
-            return 'Offerta';
+
+        // Estrai il valore numerico dal badge (può essere "10%", "10", "10€", etc.)
+        $numericValue = (float) preg_replace('/[^0-9.]/', '', $badge);
+
+        if ($numericValue <= 0) {
+            return '';
         }
-        return 'Sconto';
+
+        // Format number: rimuovi solo gli zeri decimali superflui (non quelli interi).
+        $formatted = rtrim(number_format($numericValue, 2, '.', ''), '0');
+        $formatted = rtrim($formatted, '.');
+
+        if ($discountType === 'AMOUNT') {
+            return 'SCONTO ' . $formatted . '€';
+        }
+
+        // PERCENT (default)
+        return 'SCONTO ' . $formatted . '%';
     }
 
     public static function formatExpiry(string $expiresAt): string

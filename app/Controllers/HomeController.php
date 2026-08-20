@@ -16,6 +16,7 @@ final class HomeController
         $storesById = array_column($storeRepo->all(), null, 'id');
         $offers = $offerRepo->featured();
         $latest = $offerRepo->latest();
+        $dealOfTheDay = $offerRepo->topToday(8);
         $stats = [
             'total_offers' => $offerRepo->count(),
             'total_stores' => $storeRepo->count(),
@@ -30,6 +31,6 @@ final class HomeController
             'path' => '/',
             'jsonLd' => $jsonLd,
         ]);
-        return response_view('frontend/home', compact('categories', 'stores', 'storesById', 'offers', 'latest', 'meta', 'stats'));
+        return response_view('frontend/home', compact('categories', 'stores', 'storesById', 'offers', 'latest', 'dealOfTheDay', 'meta', 'stats'));
     }
 }
