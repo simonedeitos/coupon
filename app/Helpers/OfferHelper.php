@@ -46,6 +46,11 @@ final class OfferHelper
         return 'Valido fino al ' . self::formatExpiry($expiresAt);
     }
 
+    public static function getTypeLabel(string $type): string
+    {
+        return self::getOfferTypeLabel($type);
+    }
+
     public static function getOfferTypeLabel(string $type): string
     {
         return match (strtoupper($type)) {

@@ -19,6 +19,30 @@ final class CategoryRepository
 
     public function all(): array
     {
+        if ($this->db !== null) {
+            try {
+                $rows = $this->db->query(
+                    'SELECT c.id, c.slug, c.name, c.icon, c.description,
+                            COUNT(o.id) AS offer_count
+                     FROM categories c
+                     LEFT JOIN offers o ON o.category_id = c.id AND o.status = \'ACTIVE\'
+                     WHERE c.is_active = 1
+                     GROUP BY c.id
+                     ORDER BY c.sort_order DESC, c.name ASC',
+                )->fetchAll();
+
+                return array_map(static fn (array $r): array => [
+                    'id' => (int) $r['id'],
+                    'slug' => $r['slug'],
+                    'name' => $r['name'],
+                    'icon' => $r['icon'] ?? '🏷️',
+                    'description' => $r['description'] ?? '',
+                    'offer_count' => (int) $r['offer_count'],
+                ], $rows);
+            } catch (\Throwable) {
+            }
+        }
+
         return array_values($this->cache->collection('categories', $this->seed));
     }
 
