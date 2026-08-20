@@ -120,20 +120,19 @@ final class AuthService
      */
     public function all(): array
     {
-        // Se c'è il database, leggi da lì
         if ($this->pdo) {
-            try {
-                $stmt = $this->pdo->prepare(
-                    "SELECT id, username, display_name, role, email 
-                     FROM users 
-                     WHERE is_active = 1 
-                     ORDER BY username ASC"
-                );
-                $stmt->execute();
-                return $stmt->fetchAll(PDO::FETCH_ASSOC);
-            } catch (\Exception $e) {
-                error_log('AuthService::all() database error: ' . $e->getMessage());
+            foreach ([
+                "SELECT id, username, display_name, role, email FROM users WHERE status = 'ACTIVE' ORDER BY username ASC",
+                'SELECT id, username, display_name, role, email FROM users WHERE is_active = 1 ORDER BY username ASC',
+            ] as $sql) {
+                try {
+                    $stmt = $this->pdo->prepare($sql);
+                    $stmt->execute();
+                    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+                } catch (\Throwable) {
+                }
             }
+            error_log('AuthService::all() database error: unable to query users with supported schemas');
         }
 
         // Fallback a config
@@ -153,25 +152,22 @@ final class AuthService
     {
         $username = trim((string)$username);
 
-        // Priorità: Database > Config
         if ($this->pdo) {
-            try {
-                $stmt = $this->pdo->prepare(
-                    "SELECT id, username, email, password_hash, display_name, role 
-                     FROM users 
-                     WHERE LOWER(username) = LOWER(?)
-                       AND is_active = 1
-                     LIMIT 1"
-                );
-                $stmt->execute([$username]);
-                $user = $stmt->fetch(PDO::FETCH_ASSOC);
-                if ($user) {
-                    return $user;
+            foreach ([
+                "SELECT id, username, email, password_hash, display_name, role FROM users WHERE LOWER(username) = LOWER(?) AND status = 'ACTIVE' LIMIT 1",
+                'SELECT id, username, email, password_hash, display_name, role FROM users WHERE LOWER(username) = LOWER(?) AND is_active = 1 LIMIT 1',
+            ] as $sql) {
+                try {
+                    $stmt = $this->pdo->prepare($sql);
+                    $stmt->execute([$username]);
+                    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+                    if ($user) {
+                        return $user;
+                    }
+                } catch (\Throwable) {
                 }
-            } catch (\Exception $e) {
-                error_log('AuthService::findByUsername() database error: ' . $e->getMessage());
-                // Fallback a config se c'è errore DB
             }
+            error_log('AuthService::findByUsername() database error: unable to query users with supported schemas');
         }
 
         // Fallback: Leggi da config/app.php

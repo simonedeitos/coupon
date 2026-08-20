@@ -85,7 +85,7 @@ final class OfferRepository
             }
         }
 
-        $offers = array_values($this->cache->collection('offers', $this->seed));
+        $offers = [];
         if (! empty($filters['type'])) {
             $offers = array_values(array_filter($offers, static fn (array $offer): bool => $offer['type'] === strtoupper((string) $filters['type'])));
         }

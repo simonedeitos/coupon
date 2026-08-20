@@ -56,7 +56,7 @@ if (! isset($GLOBALS['couponami'])) {
     $schema = new SchemaService($config['app'], $config['seo']);
     $categories = new CategoryRepository($cache, $config['app']['seed']['categories'], $db);
     $stores = new StoreRepository($cache, $config['app']['seed']['stores'], $db);
-    $offers = new OfferRepository($cache, $config['app']['seed']['offers'], $db);
+    $offers = new OfferRepository($cache, [], $db);
     $settings = new SettingsRepository($cache);
     $sitemap = new SitemapService($config['app']);
     $view = new ViewService(BASE_PATH . '/views');
