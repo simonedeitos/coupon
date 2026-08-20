@@ -93,7 +93,26 @@ function url(string $path = ''): string
 
 function asset(string $path): string
 {
-    return Url::asset($path);
+    $basePath = (string) config('app.asset_url', '/assets');
+    return rtrim($basePath, '/') . '/' . ltrim($path, '/');
+}
+
+function css(string $file): string
+{
+    $basePath = (string) config('app.css_path', '/assets/css');
+    return rtrim($basePath, '/') . '/' . ltrim($file, '/');
+}
+
+function js(string $file): string
+{
+    $basePath = (string) config('app.js_path', '/assets/js');
+    return rtrim($basePath, '/') . '/' . ltrim($file, '/');
+}
+
+function image(string $file): string
+{
+    $basePath = (string) config('app.images_path', '/assets/images');
+    return rtrim($basePath, '/') . '/' . ltrim($file, '/');
 }
 
 function csrf_token(): string

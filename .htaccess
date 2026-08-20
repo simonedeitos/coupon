@@ -1,22 +1,40 @@
 DirectoryIndex index.php
 Options -Indexes
 
-# Block direct access to sensitive application directories
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteBase /
-    RewriteRule ^(app|config|routes|views|storage|database|cron)(/|$) - [F,L]
+
+    RewriteRule ^(app|config|routes|views|storage|database|cron|vendor)(/|$) - [F,L]
+
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteRule ^ index.php [L,QSA]
 </IfModule>
 
+<FilesMatch "\.(env|ini|log|sql|yml|yaml|lock)$">
+    Require all denied
+</FilesMatch>
+<FilesMatch "^\\.(?!htaccess$)">
+    Require all denied
+</FilesMatch>
+<Files "composer.json">
+    Require all denied
+</Files>
+<Files "composer.lock">
+    Require all denied
+</Files>
+
+<Directory "assets">
+    <FilesMatch "\.php$">
+        Require all denied
+    </FilesMatch>
+</Directory>
+
 <IfModule mod_headers.c>
     Header always set X-Frame-Options "SAMEORIGIN"
     Header always set X-Content-Type-Options "nosniff"
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
-    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
-    Header always set Cache-Control "no-store, no-cache, must-revalidate"
 </IfModule>
 
 <IfModule mod_deflate.c>
