@@ -15,6 +15,7 @@ use App\Services\SchemaService;
 use App\Services\SeoService;
 use App\Services\SitemapService;
 use App\Services\ViewService;
+use App\Database\Connection;
 
 const BASE_PATH = __DIR__ . '/..';
 
@@ -52,9 +53,10 @@ if (! isset($GLOBALS['couponami'])) {
     $analytics = new AnalyticsService($cache);
     $seo = new SeoService($config['seo'], $config['app']);
     $schema = new SchemaService($config['app'], $config['seo']);
-    $categories = new CategoryRepository($cache, $config['app']['seed']['categories']);
-    $stores = new StoreRepository($cache, $config['app']['seed']['stores']);
-    $offers = new OfferRepository($cache, $config['app']['seed']['offers']);
+    $db = Connection::get($config['database']);
+    $categories = new CategoryRepository($cache, $config['app']['seed']['categories'], $db);
+    $stores = new StoreRepository($cache, $config['app']['seed']['stores'], $db);
+    $offers = new OfferRepository($cache, $config['app']['seed']['offers'], $db);
     $settings = new SettingsRepository($cache);
     $sitemap = new SitemapService($config['app']);
     $view = new ViewService(BASE_PATH . '/views');

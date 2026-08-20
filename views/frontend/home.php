@@ -1,5 +1,5 @@
 <main>
-    <?php echo app('view')->partial('frontend/partials/hero', ['categories' => $categories]); ?>
+    <?php echo app('view')->partial('frontend/partials/hero', ['categories' => $categories, 'offers' => $offers, 'stores' => $stores, 'stats' => $stats ?? []]); ?>
     <section id="categorie"><div class="container"><div class="section-head"><div><h2>Esplora per categoria</h2><p>Trova rapidamente le offerte che ti interessano.</p></div><a class="view-all" href="<?php echo e(url('/categorie')); ?>">Vedi tutte →</a></div><?php echo app('view')->partial('frontend/partials/category-grid', ['categories' => $categories]); ?></div></section>
     <section id="coupon"><div class="container"><div class="section-head"><div><h2>Coupon in evidenza</h2><p>Le offerte selezionate dal team Couponami.</p></div><a class="view-all" href="<?php echo e(url('/coupon')); ?>">Vedi tutti →</a></div><?php echo app('view')->partial('frontend/partials/coupon-grid', ['offers' => $offers]); ?></div></section>
     <section class="stores-band" id="negozi"><div class="container"><div class="section-head"><div><h2>Negozi popolari</h2><p>Brand con il maggior numero di offerte attive.</p></div><a class="view-all" href="<?php echo e(url('/negozi')); ?>">Tutti i negozi →</a></div><?php echo app('view')->partial('frontend/partials/store-grid', ['stores' => $stores]); ?></div></section>
