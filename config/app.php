@@ -5,7 +5,7 @@ declare(strict_types=1);
 return [
     'name' => 'Couponami',
     'env' => getenv('APP_ENV') ?: 'production',
-    'base_url' => rtrim(getenv('APP_URL') ?: 'http://127.0.0.1:8000', '/'),
+    'base_url' => rtrim(getenv('APP_URL') ?: 'https://couponami.it', '/'),
     'timezone' => 'Europe/Rome',
     'contact_email' => getenv('CONTACT_EMAIL') ?: 'info@couponami.it',
     'admin_users' => [[

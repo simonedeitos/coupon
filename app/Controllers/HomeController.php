@@ -8,10 +8,18 @@ final class HomeController
 {
     public function index(): array
     {
-        $categories = app('categoryRepository')->featured();
-        $stores = app('storeRepository')->featured();
-        $offers = app('offerRepository')->featured();
-        $latest = app('offerRepository')->latest();
+        $categoryRepo = app('categoryRepository');
+        $storeRepo = app('storeRepository');
+        $offerRepo = app('offerRepository');
+        $categories = $categoryRepo->featured();
+        $stores = $storeRepo->featured();
+        $offers = $offerRepo->featured();
+        $latest = $offerRepo->latest();
+        $stats = [
+            'total_offers' => $offerRepo->count(),
+            'total_stores' => $storeRepo->count(),
+            'total_categories' => $categoryRepo->count(),
+        ];
         $seo = app('seo');
         $jsonLd = app('schema')->generateWebSiteSchema();
         $meta = $seo->meta([
@@ -21,6 +29,6 @@ final class HomeController
             'path' => '/',
             'jsonLd' => $jsonLd,
         ]);
-        return response_view('frontend/home', compact('categories', 'stores', 'offers', 'latest', 'meta'));
+        return response_view('frontend/home', compact('categories', 'stores', 'offers', 'latest', 'meta', 'stats'));
     }
 }
