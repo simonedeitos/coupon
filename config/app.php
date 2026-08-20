@@ -7,6 +7,7 @@ return [
     'env' => getenv('APP_ENV') ?: 'production',
     'base_url' => rtrim(getenv('APP_URL') ?: 'http://127.0.0.1:8000', '/'),
     'timezone' => 'Europe/Rome',
+    'contact_email' => getenv('CONTACT_EMAIL') ?: 'info@couponami.it',
     'admin_users' => [[
         'id' => 1,
         'username' => getenv('ADMIN_USERNAME') ?: 'couponami-admin',

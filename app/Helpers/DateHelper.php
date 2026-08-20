@@ -69,6 +69,21 @@ final class DateHelper
         }
     }
 
+    /**
+     * Returns the number of days until the given expiry date.
+     * Returns a negative number if the date has already passed.
+     */
+    public static function daysUntilExpiry(string $expiresAt): int
+    {
+        try {
+            $now = new \DateTimeImmutable('today');
+            $exp = new \DateTimeImmutable((new \DateTimeImmutable($expiresAt))->format('Y-m-d'));
+            return (int) $now->diff($exp)->days * ($exp >= $now ? 1 : -1);
+        } catch (\Exception) {
+            return -1;
+        }
+    }
+
     private static function getSeoMonthNumber(): int
     {
         $now = new \DateTimeImmutable('now');
