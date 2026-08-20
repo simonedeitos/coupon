@@ -12,7 +12,15 @@ final class HomeController
         $stores = app('storeRepository')->featured();
         $offers = app('offerRepository')->featured();
         $latest = app('offerRepository')->latest();
-        $meta = app('seo')->meta(['title' => 'Couponami — Home', 'description' => 'Home dinamica con categorie, negozi, coupon in evidenza e ultime offerte.', 'path' => '/']);
+        $seo = app('seo');
+        $jsonLd = app('schema')->generateWebSiteSchema();
+        $meta = $seo->meta([
+            'title' => $seo->generateHomeTitle(),
+            'description' => $seo->generateHomeDescription(),
+            'keywords' => 'coupon, codici sconto, offerte, risparmio, ' . \App\Helpers\DateHelper::getSeoDateString(),
+            'path' => '/',
+            'jsonLd' => $jsonLd,
+        ]);
         return response_view('frontend/home', compact('categories', 'stores', 'offers', 'latest', 'meta'));
     }
 }

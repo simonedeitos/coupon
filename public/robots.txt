@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /go/
+
+Sitemap: https://couponami.it/sitemap.xml

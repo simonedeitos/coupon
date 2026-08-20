@@ -50,3 +50,16 @@ CREATE TABLE IF NOT EXISTS `import_queue_items` (`id` BIGINT UNSIGNED AUTO_INCRE
 CREATE TABLE IF NOT EXISTS `settings` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`setting_group` VARCHAR(120) NOT NULL,`setting_key` VARCHAR(190) NOT NULL,`setting_value` TEXT NULL,`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,UNIQUE KEY `uniq_settings_group_key` (`setting_group`, `setting_key`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE IF NOT EXISTS `feature_flags` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`flag_key` VARCHAR(190) NOT NULL UNIQUE,`is_enabled` TINYINT(1) NOT NULL DEFAULT 0,`rollout_percentage` TINYINT UNSIGNED NOT NULL DEFAULT 100,`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE IF NOT EXISTS `api_keys` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`network_id` BIGINT UNSIGNED NULL,`name` VARCHAR(120) NOT NULL,`key_hash` CHAR(64) NOT NULL,`last_used_at` DATETIME NULL,`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,CONSTRAINT `fk_api_keys_network` FOREIGN KEY (`network_id`) REFERENCES `affiliate_networks`(`id`) ON DELETE SET NULL,UNIQUE KEY `uniq_api_keys_name` (`name`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS `seo_title_cache` (
+  `id` INT PRIMARY KEY AUTO_INCREMENT,
+  `page_type` VARCHAR(50) NOT NULL COMMENT 'home, category, store, offer, search',
+  `page_id` INT NULL,
+  `title` TEXT NULL,
+  `meta_description` TEXT NULL,
+  `keywords` TEXT NULL,
+  `cached_month` TINYINT UNSIGNED NOT NULL,
+  `cached_year` SMALLINT UNSIGNED NOT NULL,
+  `generated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY `uniq_seo_title_cache_page` (`page_type`, `page_id`, `cached_month`, `cached_year`),
+  KEY `idx_seo_title_cache_type_month_year` (`page_type`, `cached_month`, `cached_year`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

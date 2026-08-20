@@ -9,7 +9,14 @@ final class CategoryController
     public function index(): array
     {
         $categories = app('categoryRepository')->all();
-        $meta = app('seo')->meta(['title' => 'Categorie coupon', 'description' => 'Sfoglia tutte le categorie Couponami.', 'path' => '/categorie', 'breadcrumbs' => [['label' => 'Categorie', 'url' => '/categorie']]]);
+        $seo = app('seo');
+        $meta = $seo->meta([
+            'title' => $seo->generateCategoryListTitle(),
+            'description' => 'Sfoglia tutte le categorie Couponami e trova i migliori coupon per ogni settore a ' . \App\Helpers\DateHelper::getSeoDateString() . '.',
+            'keywords' => 'categorie coupon, codici sconto per categoria, offerte ' . \App\Helpers\DateHelper::getSeoDateString(),
+            'path' => '/categorie',
+            'breadcrumbs' => [['label' => 'Categorie', 'url' => '/categorie']],
+        ]);
         return response_view('frontend/categories/index', compact('categories', 'meta'));
     }
 
@@ -20,8 +27,18 @@ final class CategoryController
             return response_view('frontend/pages/404', ['meta' => app('seo')->meta(['title' => 'Categoria non trovata', 'path' => request_path()])], 'app', 404);
         }
         $offers = app('offerRepository')->byCategory((int) $category['id']);
+        $count = count($offers);
+        $seo = app('seo');
         $breadcrumbs = [['label' => 'Categorie', 'url' => '/categorie'], ['label' => $category['name'], 'url' => '/categoria/' . $category['slug']]];
-        $meta = app('seo')->meta(['title' => $category['name'] . ' — Coupon', 'description' => $category['description'], 'path' => '/categoria/' . $category['slug'], 'breadcrumbs' => $breadcrumbs]);
+        $jsonLd = app('schema')->generateCategoryBreadcrumb($category);
+        $meta = $seo->meta([
+            'title' => $seo->generateCategoryTitle($category, $count),
+            'description' => $seo->generateCategoryMeta($category, $count),
+            'keywords' => $seo->generateCategoryKeywords($category),
+            'path' => '/categoria/' . $category['slug'],
+            'breadcrumbs' => $breadcrumbs,
+            'jsonLd' => $jsonLd,
+        ]);
         return response_view('frontend/categories/show', compact('category', 'offers', 'meta', 'breadcrumbs'));
     }
 }

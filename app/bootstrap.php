@@ -11,6 +11,7 @@ use App\Services\AnalyticsService;
 use App\Services\AuthService;
 use App\Services\CacheService;
 use App\Services\CsrfService;
+use App\Services\SchemaService;
 use App\Services\SeoService;
 use App\Services\SitemapService;
 use App\Services\ViewService;
@@ -50,6 +51,7 @@ if (! isset($GLOBALS['couponami'])) {
     $auth = new AuthService($config['app']['admin_users'], $cache);
     $analytics = new AnalyticsService($cache);
     $seo = new SeoService($config['seo'], $config['app']);
+    $schema = new SchemaService($config['app'], $config['seo']);
     $categories = new CategoryRepository($cache, $config['app']['seed']['categories']);
     $stores = new StoreRepository($cache, $config['app']['seed']['stores']);
     $offers = new OfferRepository($cache, $config['app']['seed']['offers']);
@@ -64,6 +66,7 @@ if (! isset($GLOBALS['couponami'])) {
         'auth' => $auth,
         'analytics' => $analytics,
         'seo' => $seo,
+        'schema' => $schema,
         'sitemap' => $sitemap,
         'view' => $view,
         'categoryRepository' => $categories,
