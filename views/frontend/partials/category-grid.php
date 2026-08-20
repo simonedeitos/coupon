@@ -1,0 +1,1 @@
+<div class="category-grid"><?php foreach ($categories as $category): ?><a class="category" href="<?php echo e(url('/categoria/' . $category['slug'])); ?>"><div class="category-icon"><?php echo e($category['icon']); ?></div><strong><?php echo e($category['name']); ?></strong><small><?php echo (int) $category['offer_count']; ?> offerte</small></a><?php endforeach; ?></div>
