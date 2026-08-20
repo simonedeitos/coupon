@@ -41,11 +41,18 @@ final class OfferRepository
         ];
     }
 
+    private static function escapeLike(string $value): string
+    {
+        return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
+    }
+
     public function all(array $filters = []): array
     {
         if ($this->db !== null) {
             try {
-                $sql = 'SELECT * FROM offers WHERE 1 = 1';
+                $sql = 'SELECT id, slug, store_id, category_id, offer_type, title, description, badge, coupon_code, affiliate_url, status, is_featured, expires_at, priority, external_id, dedupe_hash
+                        FROM offers
+                        WHERE 1 = 1';
                 $params = [];
 
                 if (! empty($filters['type'])) {
@@ -59,8 +66,8 @@ final class OfferRepository
                 }
 
                 if (! empty($filters['search'])) {
-                    $sql .= ' AND (title LIKE ? OR description LIKE ?)';
-                    $term = '%' . (string) $filters['search'] . '%';
+                    $sql .= ' AND (title LIKE ? ESCAPE \'\\\\\' OR description LIKE ? ESCAPE \'\\\\\')';
+                    $term = '%' . self::escapeLike((string) $filters['search']) . '%';
                     $params[] = $term;
                     $params[] = $term;
                 }
