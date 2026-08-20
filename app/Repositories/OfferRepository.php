@@ -113,4 +113,9 @@ final class OfferRepository
         }
         $this->cache->putCollection('offers', $offers);
     }
+
+    public function replaceAll(array $offers): void
+    {
+        $this->cache->putCollection('offers', $offers);
+    }
 }

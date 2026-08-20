@@ -26,10 +26,11 @@ Apri poi `http://127.0.0.1:8000`.
 La configurazione legge da variabili d'ambiente per evitare di salvare segreti nel repository:
 
 - `APP_URL`
+- `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH`, `ADMIN_DISPLAY_NAME`, `ADMIN_EMAIL`
 - `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`
 - `TRADEDOUBLER_API_KEY`, `TRADEDOUBLER_PUBLISHER_ID`, `TRADEDOUBLER_API_BASE`
 
-Le credenziali admin richieste sono già supportate tramite hash Argon2id nel file `config/app.php`.
+Le credenziali admin vanno fornite via environment variables; la password deve essere salvata come hash Argon2id in `ADMIN_PASSWORD_HASH`.
 
 ## Schema database
 

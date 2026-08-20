@@ -45,4 +45,17 @@ final class PageController
         }
         return \App\Helpers\Response::xml(app('sitemap')->generate($urls), 200, ['Content-Type' => 'application/xml; charset=utf-8']);
     }
+
+    public function robots(): array
+    {
+        $content = implode(PHP_EOL, [
+            'User-agent: *',
+            'Allow: /',
+            'Disallow: /admin',
+            'Sitemap: ' . rtrim((string) config('app.base_url'), '/') . '/sitemap.xml',
+            '',
+        ]);
+
+        return ['type' => 'raw', 'content' => $content, 'status' => 200, 'headers' => ['Content-Type' => 'text/plain; charset=utf-8']];
+    }
 }

@@ -8,6 +8,13 @@ $routes = array_merge(require BASE_PATH . '/routes/web.php', require BASE_PATH .
 $path = request_path();
 $method = request_method();
 
+if (PHP_SAPI === 'cli-server') {
+    $staticFile = __DIR__ . ($path === '/' ? '' : $path);
+    if (is_file($staticFile)) {
+        return false;
+    }
+}
+
 foreach ($routes as $route) {
     if ($route['method'] !== $method) {
         continue;
@@ -19,6 +26,11 @@ foreach ($routes as $route) {
     }
     $params = array_filter($matches, static fn ($key): bool => is_string($key), ARRAY_FILTER_USE_KEY);
     $params = [...($route['defaults'] ?? []), ...$params];
+    foreach ($params as $key => $value) {
+        if (str_ends_with((string) $key, 'id') && is_string($value) && ctype_digit($value)) {
+            $params[$key] = (int) $value;
+        }
+    }
     foreach ($route['middleware'] ?? [] as $middlewareClass) {
         $result = (new $middlewareClass())->handle($route);
         if (is_array($result)) {
@@ -47,6 +59,9 @@ function send_response(array $response): void
             break;
         case 'xml':
             header('Content-Type: application/xml; charset=utf-8');
+            echo $response['content'];
+            break;
+        case 'raw':
             echo $response['content'];
             break;
         case 'redirect':

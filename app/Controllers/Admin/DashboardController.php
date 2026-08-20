@@ -33,7 +33,7 @@ final class DashboardController
     public function analyticsExport(): array
     {
         $csv = app('analytics')->exportCsv(app('analytics')->clickSeries());
-        return ['type' => 'html', 'content' => $csv, 'status' => 200, 'headers' => ['Content-Type' => 'text/csv; charset=utf-8', 'Content-Disposition' => 'attachment; filename="couponami-analytics.csv"']];
+        return ['type' => 'raw', 'content' => $csv, 'status' => 200, 'headers' => ['Content-Type' => 'text/csv; charset=utf-8', 'Content-Disposition' => 'attachment; filename="couponami-analytics.csv"']];
     }
 
     public function verification(): array

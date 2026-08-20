@@ -10,7 +10,7 @@ final class CacheService
     {
         foreach (['cache', 'logs', 'sitemaps'] as $segment) {
             if (! is_dir($this->storagePath . '/' . $segment)) {
-                mkdir($this->storagePath . '/' . $segment, 0777, true);
+                mkdir($this->storagePath . '/' . $segment, 0755, true);
             }
         }
     }
@@ -35,14 +35,16 @@ final class CacheService
         file_put_contents($this->path($segment, $fileName), json_encode($record, JSON_UNESCAPED_UNICODE) . PHP_EOL, FILE_APPEND);
     }
 
-    public function readJsonLines(string $segment, string $fileName, int $limit = 200): array
+    public function readJsonLines(string $segment, string $fileName, ?int $limit = 200): array
     {
         $file = $this->path($segment, $fileName);
         if (! is_file($file)) {
             return [];
         }
         $lines = array_filter(explode(PHP_EOL, trim((string) file_get_contents($file))));
-        $lines = array_slice($lines, -$limit);
+        if ($limit !== null) {
+            $lines = array_slice($lines, -$limit);
+        }
         return array_values(array_filter(array_map(static fn (string $line): ?array => json_decode($line, true), $lines)));
     }
 

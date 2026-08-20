@@ -56,7 +56,7 @@ final class AnalyticsService
 
     public function anonymizeOldClicks(int $days = 90): int
     {
-        $entries = $this->cache->readJsonLines('logs', 'clicks.log', 1000);
+        $entries = $this->cache->readJsonLines('logs', 'clicks.log', null);
         $updated = 0;
         foreach ($entries as &$entry) {
             if (strtotime($entry['created_at'] ?? 'now') < strtotime('-' . $days . ' days')) {

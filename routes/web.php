@@ -21,6 +21,7 @@ return [
     ['method' => 'GET', 'pattern' => '/cerca', 'handler' => [SearchController::class, 'index']],
     ['method' => 'POST', 'pattern' => '/newsletter', 'handler' => [PageController::class, 'newsletter'], 'middleware' => [App\Middleware\CsrfMiddleware::class]],
     ['method' => 'GET', 'pattern' => '/sitemap.xml', 'handler' => [PageController::class, 'sitemap']],
+    ['method' => 'GET', 'pattern' => '/robots.txt', 'handler' => [PageController::class, 'robots']],
     ['method' => 'GET', 'pattern' => '/come-funziona', 'handler' => [PageController::class, 'show'], 'defaults' => ['slug' => 'come-funziona']],
     ['method' => 'GET', 'pattern' => '/chi-siamo', 'handler' => [PageController::class, 'show'], 'defaults' => ['slug' => 'chi-siamo']],
     ['method' => 'GET', 'pattern' => '/privacy', 'handler' => [PageController::class, 'show'], 'defaults' => ['slug' => 'privacy']],

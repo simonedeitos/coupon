@@ -66,12 +66,18 @@ function clear_old_input(): void
     unset($_SESSION['_old']);
 }
 
-function flash(string $key, mixed $value = null, bool $peek = false): mixed
+function flash(string $key, mixed ...$payload): mixed
 {
-    if (func_num_args() > 1) {
-        $_SESSION['_flash'][$key] = $value;
+    if (count($payload) > 0) {
+        $_SESSION['_flash'][$key] = $payload[0];
         return null;
     }
+
+    return flash_get($key);
+}
+
+function flash_get(string $key, bool $peek = false): mixed
+{
     $messages = $_SESSION['_flash'] ?? [];
     $message = $messages[$key] ?? null;
     if (! $peek) {

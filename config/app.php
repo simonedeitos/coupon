@@ -9,11 +9,11 @@ return [
     'timezone' => 'Europe/Rome',
     'admin_users' => [[
         'id' => 1,
-        'username' => 'simonedeitos',
-        'password_hash' => '$argon2id$v=19$m=65536,t=4,p=1$ZDZ0RERFa0FyYWloWFRNUw$TBc+iX2WxhHuAJt8HsT3Dft4FGWkYzz749lvo/ibQSc',
+        'username' => getenv('ADMIN_USERNAME') ?: 'couponami-admin',
+        'password_hash' => getenv('ADMIN_PASSWORD_HASH') ?: '',
         'role' => 'SUPER_ADMIN',
-        'display_name' => 'Simone Deitos',
-        'email' => 'admin@couponami.local',
+        'display_name' => getenv('ADMIN_DISPLAY_NAME') ?: 'Couponami Admin',
+        'email' => getenv('ADMIN_EMAIL') ?: 'admin@example.test',
     ]],
     'roles' => ['SUPER_ADMIN', 'ADMIN', 'EDITOR', 'ANALYTICS'],
     'static_pages' => [
