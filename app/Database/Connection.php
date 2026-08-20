@@ -19,8 +19,7 @@ final class Connection
         }
         self::$attempted = true;
 
-        // Only attempt DB connection if both host and database env variables are set
-        if (! getenv('DB_HOST') || ! getenv('DB_DATABASE')) {
+        if (($config['host'] ?? '') === '' || ($config['database'] ?? '') === '') {
             return null;
         }
 

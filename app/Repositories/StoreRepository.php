@@ -19,6 +19,34 @@ final class StoreRepository
 
     public function all(): array
     {
+        if ($this->db !== null) {
+            try {
+                $rows = $this->db->query(
+                    'SELECT s.id, s.slug, s.name, s.description, s.website_url AS website,
+                            s.is_featured,
+                            COUNT(o.id) AS offers_count
+                     FROM stores s
+                     LEFT JOIN offers o ON o.store_id = s.id AND o.status = \'ACTIVE\'
+                     WHERE s.is_active = 1
+                     GROUP BY s.id
+                     ORDER BY s.is_featured DESC, offers_count DESC, s.name ASC',
+                )->fetchAll();
+
+                return array_map(static fn (array $r): array => [
+                    'id' => (int) $r['id'],
+                    'slug' => $r['slug'],
+                    'name' => $r['name'],
+                    'initial' => strtoupper(mb_substr($r['name'], 0, 1)),
+                    'description' => $r['description'] ?? '',
+                    'website' => $r['website'] ?? '',
+                    'offers_count' => (int) $r['offers_count'],
+                    'featured' => (bool) $r['is_featured'],
+                ], $rows);
+            } catch (\Throwable $e) {
+                error_log('StoreRepository::all failed: ' . $e->getMessage());
+            }
+        }
+
         return array_values($this->cache->collection('stores', $this->seed));
     }
 

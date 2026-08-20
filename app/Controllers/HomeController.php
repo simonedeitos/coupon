@@ -13,6 +13,7 @@ final class HomeController
         $offerRepo = app('offerRepository');
         $categories = $categoryRepo->featured();
         $stores = $storeRepo->featured();
+        $storesById = array_column($storeRepo->all(), null, 'id');
         $offers = $offerRepo->featured();
         $latest = $offerRepo->latest();
         $stats = [
@@ -29,6 +30,6 @@ final class HomeController
             'path' => '/',
             'jsonLd' => $jsonLd,
         ]);
-        return response_view('frontend/home', compact('categories', 'stores', 'offers', 'latest', 'meta', 'stats'));
+        return response_view('frontend/home', compact('categories', 'stores', 'storesById', 'offers', 'latest', 'meta', 'stats'));
     }
 }

@@ -41,8 +41,50 @@ final class OfferRepository
         ];
     }
 
+    private static function escapeLike(string $value): string
+    {
+        return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
+    }
+
     public function all(array $filters = []): array
     {
+        if ($this->db !== null) {
+            try {
+                $sql = 'SELECT id, slug, store_id, category_id, offer_type, title, description, badge, coupon_code, affiliate_url, status, is_featured, expires_at, priority, external_id, dedupe_hash
+                        FROM offers
+                        WHERE 1 = 1';
+                $params = [];
+
+                if (! empty($filters['type'])) {
+                    $sql .= ' AND offer_type = ?';
+                    $params[] = strtoupper((string) $filters['type']);
+                }
+
+                if (! empty($filters['status'])) {
+                    $sql .= ' AND status = ?';
+                    $params[] = strtoupper((string) $filters['status']);
+                }
+
+                if (! empty($filters['search'])) {
+                    $sql .= ' AND (title LIKE ? ESCAPE \'\\\\\' OR description LIKE ? ESCAPE \'\\\\\')';
+                    $term = '%' . self::escapeLike((string) $filters['search']) . '%';
+                    $params[] = $term;
+                    $params[] = $term;
+                }
+
+                $sql .= ($filters['sort'] ?? '') === 'recenti'
+                    ? ' ORDER BY created_at DESC, priority DESC'
+                    : ' ORDER BY priority DESC, created_at DESC';
+
+                $stmt = $this->db->prepare($sql);
+                $stmt->execute($params);
+
+                return array_map([self::class, 'mapRow'], $stmt->fetchAll());
+            } catch (\Throwable $e) {
+                error_log('OfferRepository::all failed: ' . $e->getMessage());
+            }
+        }
+
         $offers = array_values($this->cache->collection('offers', $this->seed));
         if (! empty($filters['type'])) {
             $offers = array_values(array_filter($offers, static fn (array $offer): bool => $offer['type'] === strtoupper((string) $filters['type'])));
