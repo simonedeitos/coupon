@@ -1,3 +1,5 @@
+/.env
+/.env.*
 /storage/cache/*.json
 /storage/logs/*.log
 /storage/logs/*.jsonl

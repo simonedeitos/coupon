@@ -1,9 +1,11 @@
 DirectoryIndex index.php
 Options -Indexes
 
+# Block direct access to sensitive application directories
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteBase /
+    RewriteRule ^(app|config|routes|views|storage|database|cron)(/|$) - [F,L]
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteRule ^ index.php [L,QSA]
