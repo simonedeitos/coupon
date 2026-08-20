@@ -80,7 +80,8 @@ final class OfferRepository
                 $stmt->execute($params);
 
                 return array_map([self::class, 'mapRow'], $stmt->fetchAll());
-            } catch (\Throwable) {
+            } catch (\Throwable $e) {
+                error_log('OfferRepository::all failed: ' . $e->getMessage());
             }
         }
 

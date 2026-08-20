@@ -39,7 +39,8 @@ final class CategoryRepository
                     'description' => $r['description'] ?? '',
                     'offer_count' => (int) $r['offer_count'],
                 ], $rows);
-            } catch (\Throwable) {
+            } catch (\Throwable $e) {
+                error_log('CategoryRepository::all failed: ' . $e->getMessage());
             }
         }
 

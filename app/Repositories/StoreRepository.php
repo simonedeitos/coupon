@@ -42,7 +42,8 @@ final class StoreRepository
                     'offers_count' => (int) $r['offers_count'],
                     'featured' => (bool) $r['is_featured'],
                 ], $rows);
-            } catch (\Throwable) {
+            } catch (\Throwable $e) {
+                error_log('StoreRepository::all failed: ' . $e->getMessage());
             }
         }
 
