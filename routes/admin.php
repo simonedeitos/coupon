@@ -37,6 +37,7 @@ return [
     ['method' => 'GET', 'pattern' => '/admin/analytics/export', 'handler' => [DashboardController::class, 'analyticsExport'], 'middleware' => [AuthMiddleware::class]],
     ['method' => 'GET', 'pattern' => '/admin/verification', 'handler' => [DashboardController::class, 'verification'], 'middleware' => [AuthMiddleware::class]],
     ['method' => 'GET', 'pattern' => '/admin/audit', 'handler' => [DashboardController::class, 'audit'], 'middleware' => [AuthMiddleware::class]],
+    ['method' => 'GET', 'pattern' => '/admin/seo', 'handler' => [DashboardController::class, 'seo'], 'middleware' => [AuthMiddleware::class]],
     ['method' => 'GET', 'pattern' => '/admin/settings', 'handler' => [ManagementController::class, 'index'], 'defaults' => ['section' => 'settings'], 'middleware' => [AuthMiddleware::class]],
     ['method' => 'POST', 'pattern' => '/admin/settings/save', 'handler' => [ManagementController::class, 'save'], 'defaults' => ['section' => 'settings'], 'middleware' => [AuthMiddleware::class, CsrfMiddleware::class]],
     ['method' => 'GET', 'pattern' => '/admin/users', 'handler' => [DashboardController::class, 'users'], 'middleware' => [AuthMiddleware::class]],

@@ -50,6 +50,76 @@ final class DashboardController
         return response_view('admin/audit/index', compact('items', 'meta'), 'admin');
     }
 
+    public function seo(): array
+    {
+        $seoService = app('seo');
+        $categories = app('categoryRepository')->all();
+        $stores = app('storeRepository')->all();
+
+        // Preload all offers and group by category_id/store_id to avoid N+1
+        $allOffers = app('offerRepository')->all();
+        $countByCategory = [];
+        $countByStore = [];
+        foreach ($allOffers as $offer) {
+            if (! empty($offer['category_id'])) {
+                $countByCategory[(int) $offer['category_id']] = ($countByCategory[(int) $offer['category_id']] ?? 0) + 1;
+            }
+            if (! empty($offer['store_id'])) {
+                $countByStore[(int) $offer['store_id']] = ($countByStore[(int) $offer['store_id']] ?? 0) + 1;
+            }
+        }
+
+        $pages = [];
+
+        // Home
+        $homeTitle = $seoService->generateHomeTitle();
+        $homeDesc = $seoService->generateHomeDescription();
+        $pages[] = [
+            'type' => 'Home',
+            'name' => 'Couponami',
+            'url' => '/',
+            'title' => $homeTitle,
+            'description' => $homeDesc,
+            'title_len' => mb_strlen($homeTitle),
+            'desc_len' => mb_strlen($homeDesc),
+        ];
+
+        // Categories
+        foreach ($categories as $category) {
+            $count = $countByCategory[(int) $category['id']] ?? 0;
+            $title = $seoService->generateCategoryTitle($category, $count);
+            $desc = $seoService->generateCategoryMeta($category, $count);
+            $pages[] = [
+                'type' => 'Categoria',
+                'name' => $category['name'],
+                'url' => '/categoria/' . $category['slug'],
+                'title' => $title,
+                'description' => $desc,
+                'title_len' => mb_strlen($title),
+                'desc_len' => mb_strlen($desc),
+            ];
+        }
+
+        // Stores
+        foreach ($stores as $store) {
+            $count = $countByStore[(int) $store['id']] ?? 0;
+            $title = $seoService->generateStoreTitle($store, $count);
+            $desc = $seoService->generateStoreMeta($store, $count);
+            $pages[] = [
+                'type' => 'Negozio',
+                'name' => $store['name'],
+                'url' => '/negozio/' . $store['slug'],
+                'title' => $title,
+                'description' => $desc,
+                'title_len' => mb_strlen($title),
+                'desc_len' => mb_strlen($desc),
+            ];
+        }
+
+        $meta = app('seo')->meta(['title' => 'SEO Dashboard', 'path' => '/admin/seo']);
+        return response_view('admin/seo', compact('pages', 'meta'), 'admin');
+    }
+
     public function users(): array
     {
         $users = app('auth')->all();
