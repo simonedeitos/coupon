@@ -6,6 +6,7 @@
   }
 
   let autoCloseTimer = null;
+  const MODAL_AUTO_CLOSE_MS = 2000;
 
   const closeModal = () => {
     clearTimeout(autoCloseTimer);
@@ -21,7 +22,7 @@
     if (navigator.clipboard?.writeText) {
       try { await navigator.clipboard.writeText(code); } catch (error) {}
     }
-    autoCloseTimer = setTimeout(closeModal, 2000);
+    autoCloseTimer = setTimeout(closeModal, MODAL_AUTO_CLOSE_MS);
   };
 
   document.addEventListener('click', async (event) => {
