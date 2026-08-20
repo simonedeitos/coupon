@@ -1,0 +1,4 @@
+{"action":"login","actor":"simonedeitos","created_at":"2026-08-20T17:13:44+02:00"}
+{"action":"tradedoubler:import","actor":"simonedeitos","system":"VOUCHERS","imported":1,"duplicates":0,"errors":0,"created_at":"2026-08-20T18:12:32+02:00"}
+{"action":"delete:offers","actor":"simonedeitos","target":1,"created_at":"2026-08-20T18:36:28+02:00"}
+{"action":"tradedoubler:import","actor":"simonedeitos","system":"VOUCHERS","imported":1,"duplicates":0,"errors":0,"created_at":"2026-08-20T18:36:44+02:00"}
