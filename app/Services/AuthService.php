@@ -126,7 +126,7 @@ final class AuthService
                 $stmt = $this->pdo->prepare(
                     "SELECT id, username, display_name, role, email 
                      FROM users 
-                     WHERE status = 'ACTIVE' 
+                     WHERE is_active = 1 
                      ORDER BY username ASC"
                 );
                 $stmt->execute();
@@ -157,15 +157,15 @@ final class AuthService
         if ($this->pdo) {
             try {
                 $stmt = $this->pdo->prepare(
-                    "SELECT id, username, email, password_hash, display_name, role, status 
+                    "SELECT id, username, email, password_hash, display_name, role, is_active 
                      FROM users 
-                     WHERE LOWER(username) = LOWER(?) 
+                     WHERE LOWER(username) = LOWER(?)
+                       AND is_active = 1
                      LIMIT 1"
                 );
                 $stmt->execute([$username]);
                 $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-                if ($user && $user['status'] === 'ACTIVE') {
+                if ($user) {
                     return $user;
                 }
             } catch (\Exception $e) {

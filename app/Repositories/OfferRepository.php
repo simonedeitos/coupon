@@ -104,46 +104,44 @@ final class OfferRepository
 
     public function count(): int
     {
-        if ($this->db !== null) {
-            return (int) $this->db->query(
-                "SELECT COUNT(*) FROM offers WHERE status = 'ACTIVE' AND (expires_at IS NULL OR expires_at > NOW())",
-            )->fetchColumn();
+        if ($this->db === null) {
+            return 0;
         }
-        return count($this->all(['status' => 'ACTIVE']));
+        return (int) $this->db->query(
+            "SELECT COUNT(*) FROM offers WHERE status = 'ACTIVE' AND (expires_at IS NULL OR expires_at > NOW())",
+        )->fetchColumn();
     }
 
     public function featured(int $limit = 3): array
     {
-        if ($this->db !== null) {
-            $stmt = $this->db->prepare(
-                "SELECT * FROM offers
-                 WHERE status = 'ACTIVE' AND is_featured = 1
-                   AND (expires_at IS NULL OR expires_at > NOW())
-                 ORDER BY priority DESC, created_at DESC
-                 LIMIT ?",
-            );
-            $stmt->execute([$limit]);
-            return array_map([self::class, 'mapRow'], $stmt->fetchAll());
+        if ($this->db === null) {
+            return [];
         }
-        return array_slice(array_values(array_filter($this->all(['status' => 'ACTIVE']), static fn (array $offer): bool => (bool) ($offer['featured'] ?? false))), 0, $limit);
+        $stmt = $this->db->prepare(
+            "SELECT * FROM offers
+             WHERE status = 'ACTIVE' AND is_featured = 1
+               AND (expires_at IS NULL OR expires_at > NOW())
+             ORDER BY priority DESC, created_at DESC
+             LIMIT ?",
+        );
+        $stmt->execute([$limit]);
+        return array_map([self::class, 'mapRow'], $stmt->fetchAll());
     }
 
     public function latest(int $limit = 4): array
     {
-        if ($this->db !== null) {
-            $stmt = $this->db->prepare(
-                "SELECT * FROM offers
-                 WHERE status = 'ACTIVE'
-                   AND (expires_at IS NULL OR expires_at > NOW())
-                 ORDER BY created_at DESC
-                 LIMIT ?",
-            );
-            $stmt->execute([$limit]);
-            return array_map([self::class, 'mapRow'], $stmt->fetchAll());
+        if ($this->db === null) {
+            return [];
         }
-        $offers = $this->all();
-        usort($offers, static fn (array $a, array $b): int => strcmp($b['expires_at'], $a['expires_at']));
-        return array_slice($offers, 0, $limit);
+        $stmt = $this->db->prepare(
+            "SELECT * FROM offers
+             WHERE status = 'ACTIVE'
+               AND (expires_at IS NULL OR expires_at > NOW())
+             ORDER BY created_at DESC
+             LIMIT ?",
+        );
+        $stmt->execute([$limit]);
+        return array_map([self::class, 'mapRow'], $stmt->fetchAll());
     }
 
     public function byCategory(int $categoryId): array
