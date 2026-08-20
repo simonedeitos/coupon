@@ -8,6 +8,8 @@ use PDO;
 
 final class AuthService
 {
+    private ?array $userColumns = null;
+
     public function __construct(
         private readonly array $users,
         private readonly CacheService $cache,
@@ -121,18 +123,46 @@ final class AuthService
     public function all(): array
     {
         if ($this->pdo) {
-            foreach ([
-                "SELECT id, username, display_name, role, email FROM users WHERE status = 'ACTIVE' ORDER BY username ASC",
-                'SELECT id, username, display_name, role, email FROM users WHERE is_active = 1 ORDER BY username ASC',
-            ] as $sql) {
+            $queries = [];
+            $columns = $this->userColumns();
+            if ($columns === []) {
+                $queries = [
+                    "SELECT id, username, display_name, role, email FROM users WHERE status = 'ACTIVE' ORDER BY username ASC",
+                    'SELECT id, username, display_name, role, email FROM users WHERE is_active = 1 ORDER BY username ASC',
+                ];
+            } else {
+                if (! empty($columns['status']) && ! empty($columns['is_active'])) {
+                    $queries[] = "SELECT id, username, display_name, role, email FROM users WHERE status = 'ACTIVE' OR is_active = 1 ORDER BY username ASC";
+                } elseif (! empty($columns['status'])) {
+                    $queries[] = "SELECT id, username, display_name, role, email FROM users WHERE status = 'ACTIVE' ORDER BY username ASC";
+                } elseif (! empty($columns['is_active'])) {
+                    $queries[] = 'SELECT id, username, display_name, role, email FROM users WHERE is_active = 1 ORDER BY username ASC';
+                }
+            }
+
+            $hadDatabaseError = false;
+            $hadSuccessfulQuery = false;
+            foreach ($queries as $sql) {
                 try {
                     $stmt = $this->pdo->prepare($sql);
                     $stmt->execute();
-                    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    $hadSuccessfulQuery = true;
+                    $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    if ($users !== []) {
+                        return $users;
+                    }
                 } catch (\Throwable) {
+                    $hadDatabaseError = true;
                 }
             }
-            error_log('AuthService::all() database error: unable to query users with supported schemas');
+
+            if ($hadSuccessfulQuery) {
+                return [];
+            }
+
+            if ($hadDatabaseError || $queries === []) {
+                error_log('AuthService::all() database error: unable to query users with supported schemas');
+            }
         }
 
         // Fallback a config
@@ -153,21 +183,46 @@ final class AuthService
         $username = trim((string)$username);
 
         if ($this->pdo) {
-            foreach ([
-                "SELECT id, username, email, password_hash, display_name, role FROM users WHERE LOWER(username) = LOWER(?) AND status = 'ACTIVE' LIMIT 1",
-                'SELECT id, username, email, password_hash, display_name, role FROM users WHERE LOWER(username) = LOWER(?) AND is_active = 1 LIMIT 1',
-            ] as $sql) {
+            $queries = [];
+            $columns = $this->userColumns();
+            if ($columns === []) {
+                $queries = [
+                    "SELECT id, username, email, password_hash, display_name, role FROM users WHERE LOWER(username) = LOWER(?) AND status = 'ACTIVE' LIMIT 1",
+                    'SELECT id, username, email, password_hash, display_name, role FROM users WHERE LOWER(username) = LOWER(?) AND is_active = 1 LIMIT 1',
+                ];
+            } else {
+                if (! empty($columns['status']) && ! empty($columns['is_active'])) {
+                    $queries[] = "SELECT id, username, email, password_hash, display_name, role FROM users WHERE LOWER(username) = LOWER(?) AND (status = 'ACTIVE' OR is_active = 1) LIMIT 1";
+                } elseif (! empty($columns['status'])) {
+                    $queries[] = "SELECT id, username, email, password_hash, display_name, role FROM users WHERE LOWER(username) = LOWER(?) AND status = 'ACTIVE' LIMIT 1";
+                } elseif (! empty($columns['is_active'])) {
+                    $queries[] = 'SELECT id, username, email, password_hash, display_name, role FROM users WHERE LOWER(username) = LOWER(?) AND is_active = 1 LIMIT 1';
+                }
+            }
+
+            $hadDatabaseError = false;
+            $hadSuccessfulQuery = false;
+            foreach ($queries as $sql) {
                 try {
                     $stmt = $this->pdo->prepare($sql);
                     $stmt->execute([$username]);
+                    $hadSuccessfulQuery = true;
                     $user = $stmt->fetch(PDO::FETCH_ASSOC);
                     if ($user) {
                         return $user;
                     }
                 } catch (\Throwable) {
+                    $hadDatabaseError = true;
                 }
             }
-            error_log('AuthService::findByUsername() database error: unable to query users with supported schemas');
+
+            if (! $hadSuccessfulQuery && ($hadDatabaseError || $queries === [])) {
+                error_log('AuthService::findByUsername() database error: unable to query users with supported schemas');
+            }
+
+            if ($hadSuccessfulQuery) {
+                return null;
+            }
         }
 
         // Fallback: Leggi da config/app.php
@@ -187,5 +242,34 @@ final class AuthService
     {
         $attempts = $this->cache->collection('login_attempts', []);
         return is_array($attempts) ? $attempts : [];
+    }
+
+    private function userColumns(): array
+    {
+        if ($this->userColumns !== null) {
+            return $this->userColumns;
+        }
+
+        if ($this->pdo === null) {
+            $this->userColumns = [];
+            return $this->userColumns;
+        }
+
+        try {
+            $stmt = $this->pdo->query('SELECT * FROM users LIMIT 0');
+            $columns = [];
+            for ($i = 0; $i < $stmt->columnCount(); $i++) {
+                $meta = $stmt->getColumnMeta($i);
+                $name = strtolower((string) ($meta['name'] ?? ''));
+                if ($name !== '') {
+                    $columns[$name] = true;
+                }
+            }
+            $this->userColumns = $columns;
+        } catch (\Throwable) {
+            $this->userColumns = [];
+        }
+
+        return $this->userColumns;
     }
 }
