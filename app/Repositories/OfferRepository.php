@@ -33,10 +33,11 @@ final class OfferRepository
             'featured' => (bool) ($r['is_featured'] ?? $r['featured'] ?? false),
             'badge' => $r['badge'] ?? $r['discount'] ?? '',
             'expires_at' => $r['expires_at'] ?? '',
-            'clicks' => (int) ($r['clicks'] ?? 0),
+            'clicks' => (int) ($r['click_count'] ?? $r['clicks'] ?? 0),
             'priority' => (int) ($r['priority'] ?? 0),
             'external_id' => $r['external_id'] ?? '',
             'hash' => $r['dedupe_hash'] ?? $r['hash'] ?? '',
+            'discount_type' => $r['discount_type'] ?? 'PERCENT',
         ];
     }
 
@@ -52,8 +53,7 @@ final class OfferRepository
         }
 
         try {
-            // NB: la tabella "offers" non ha una colonna "clicks" -> non selezionarla mai qui.
-            $sql = 'SELECT id, slug, store_id, category_id, offer_type, title, description, badge, coupon_code, affiliate_url, status, is_featured, expires_at, priority, external_id, dedupe_hash
+            $sql = 'SELECT id, slug, store_id, category_id, offer_type, title, description, badge, coupon_code, affiliate_url, status, is_featured, expires_at, priority, external_id, dedupe_hash, click_count, discount_type
                     FROM offers
                     WHERE 1 = 1';
             $params = [];
@@ -110,17 +110,57 @@ final class OfferRepository
             return [];
         }
         try {
+            // Prima prova i record con is_featured = 1 (selezione manuale).
+            // Se non ce ne sono, cade back automaticamente sui più cliccati (popolarità reale).
             $stmt = $this->db->prepare(
                 "SELECT * FROM offers
                  WHERE status = 'ACTIVE' AND is_featured = 1
                    AND (expires_at IS NULL OR expires_at > NOW())
-                 ORDER BY priority DESC, created_at DESC
+                 ORDER BY click_count DESC, priority DESC, created_at DESC
+                 LIMIT ?",
+            );
+            $stmt->execute([$limit]);
+            $rows = $stmt->fetchAll();
+            if ($rows) {
+                return array_map([self::class, 'mapRow'], $rows);
+            }
+
+            // Fallback: top N per click reali
+            $stmt = $this->db->prepare(
+                "SELECT * FROM offers
+                 WHERE status = 'ACTIVE'
+                   AND (expires_at IS NULL OR expires_at > NOW())
+                 ORDER BY click_count DESC, priority DESC, created_at DESC
                  LIMIT ?",
             );
             $stmt->execute([$limit]);
             return array_map([self::class, 'mapRow'], $stmt->fetchAll());
         } catch (\Throwable $e) {
             error_log('OfferRepository::featured failed: ' . $e->getMessage());
+            return [];
+        }
+    }
+
+    public function topToday(int $limit = 8): array
+    {
+        if ($this->db === null) {
+            return [];
+        }
+        try {
+            $stmt = $this->db->prepare(
+                "SELECT o.*, COUNT(c.id) AS today_clicks
+                 FROM offers o
+                 LEFT JOIN clicks c ON c.offer_id = o.id AND DATE(c.created_at) = CURDATE()
+                 WHERE o.status = 'ACTIVE'
+                   AND (o.expires_at IS NULL OR o.expires_at > NOW())
+                 GROUP BY o.id
+                 ORDER BY today_clicks DESC, o.click_count DESC, o.created_at DESC
+                 LIMIT ?",
+            );
+            $stmt->execute([$limit]);
+            return array_map([self::class, 'mapRow'], $stmt->fetchAll());
+        } catch (\Throwable $e) {
+            error_log('OfferRepository::topToday failed: ' . $e->getMessage());
             return [];
         }
     }
@@ -231,7 +271,7 @@ final class OfferRepository
             if (! empty($payload['id'])) {
                 $stmt = $this->db->prepare(
                     'UPDATE offers SET store_id = ?, category_id = ?, offer_type = ?, title = ?, slug = ?, description = ?,
-                        badge = ?, coupon_code = ?, affiliate_url = ?, status = ?, is_featured = ?, expires_at = ?, priority = ?
+                        badge = ?, discount_type = ?, coupon_code = ?, affiliate_url = ?, status = ?, is_featured = ?, expires_at = ?, priority = ?
                      WHERE id = ?'
                 );
                 $stmt->execute([
@@ -242,6 +282,7 @@ final class OfferRepository
                     $payload['slug'],
                     $payload['description'] ?? null,
                     $payload['discount'] ?? $payload['badge'] ?? null,
+                    strtoupper((string) ($payload['discount_type'] ?? 'PERCENT')),
                     $payload['code'] ?? null,
                     $payload['affiliate_url'] ?? null,
                     $status,
@@ -254,8 +295,8 @@ final class OfferRepository
             }
 
             $stmt = $this->db->prepare(
-                'INSERT INTO offers (store_id, category_id, offer_type, title, slug, description, badge, coupon_code, affiliate_url, status, is_featured, expires_at, priority)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                'INSERT INTO offers (store_id, category_id, offer_type, title, slug, description, badge, discount_type, coupon_code, affiliate_url, status, is_featured, expires_at, priority)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $stmt->execute([
                 (int) ($payload['store_id'] ?? 0),
@@ -265,6 +306,7 @@ final class OfferRepository
                 $payload['slug'],
                 $payload['description'] ?? null,
                 $payload['discount'] ?? $payload['badge'] ?? null,
+                strtoupper((string) ($payload['discount_type'] ?? 'PERCENT')),
                 $payload['code'] ?? null,
                 $payload['affiliate_url'] ?? null,
                 $status,

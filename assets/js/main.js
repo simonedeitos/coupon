@@ -10,28 +10,28 @@
     document.body.classList.remove('modal-open');
   };
 
-  const openModal = async (code, trackUrl) => {
+  const openModal = (code, trackUrl) => {
+    // IMPORTANTE: window.open deve essere chiamato SINCRONAMENTE nel gestore del click,
+    // prima di qualsiasi await, altrimenti il browser blocca il popup come non richiesto dall'utente.
+    if (trackUrl) {
+      window.open(trackUrl, '_blank', 'noopener,noreferrer');
+    }
+
     codeTarget.textContent = code;
     modal.hidden = false;
     document.body.classList.add('modal-open');
 
     if (navigator.clipboard?.writeText) {
-      try { await navigator.clipboard.writeText(code); } catch (error) {}
-    }
-
-    // Apre il link del negozio (redirect di tracciamento /go/{id}) in una nuova scheda,
-    // così il click viene registrato dal network di affiliazione (es. TradeDoubler).
-    if (trackUrl) {
-      window.open(trackUrl, '_blank', 'noopener');
+      navigator.clipboard.writeText(code).catch(() => {});
     }
   };
 
-  document.addEventListener('click', async (event) => {
+  document.addEventListener('click', (event) => {
     const trigger = event.target.closest('[data-offer-code]');
     if (trigger) {
       const code = trigger.getAttribute('data-offer-code') || '';
       const trackUrl = trigger.getAttribute('data-offer-track') || '';
-      await openModal(code, trackUrl);
+      openModal(code, trackUrl);
       return;
     }
 

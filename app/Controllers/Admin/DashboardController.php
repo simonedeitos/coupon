@@ -45,16 +45,43 @@ final class DashboardController
 
     public function audit(): array
     {
-        $items = app('cache')->readJsonLines('logs', 'audit.log', 100);
+        $db = app('db');
+        $page = max(1, (int) request_input('page', 1));
+        $perPage = 50;
+        $offset = ($page - 1) * $perPage;
+        $items = [];
+        $total = 0;
+
+        if ($db !== null) {
+            try {
+                $total = (int) $db->query('SELECT COUNT(*) FROM audit_logs')->fetchColumn();
+                $stmt = $db->prepare(
+                    'SELECT al.*, u.username AS actor
+                     FROM audit_logs al
+                     LEFT JOIN users u ON u.id = al.user_id
+                     ORDER BY al.created_at DESC
+                     LIMIT ? OFFSET ?'
+                );
+                $stmt->execute([$perPage, $offset]);
+                $items = $stmt->fetchAll();
+            } catch (\Throwable) {
+                // Fallback su file flat
+                $items = app('cache')->readJsonLines('logs', 'audit.log', 100);
+            }
+        } else {
+            $items = app('cache')->readJsonLines('logs', 'audit.log', 100);
+        }
+
         $meta = app('seo')->meta(['title' => 'Audit log', 'path' => '/admin/audit']);
-        return response_view('admin/audit/index', compact('items', 'meta'), 'admin');
+        $pages = $perPage > 0 && $total > 0 ? (int) ceil($total / $perPage) : 1;
+        return response_view('admin/audit/index', compact('items', 'meta', 'page', 'pages', 'total'), 'admin');
     }
 
     public function users(): array
     {
-        $items = app('auth')->all();
+        $users = app('auth')->all();
         $meta = app('seo')->meta(['title' => 'Utenti admin', 'path' => '/admin/users']);
-        return response_view('admin/users/index', compact('items', 'meta'), 'admin');
+        return response_view('admin/users/index', compact('users', 'meta'), 'admin');
     }
 
     public function seo(): array

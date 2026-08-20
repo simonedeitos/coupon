@@ -53,7 +53,7 @@ if (! isset($GLOBALS['couponami'])) {
     $csrf = new CsrfService();
     $db = Connection::get($config['database']);
     $auth = new AuthService($config['app']['admin_users'], $cache, $db);
-    $analytics = new AnalyticsService($cache);
+    $analytics = new AnalyticsService($cache, $db);
     $seo = new SeoService($config['seo'], $config['app']);
     $schema = new SchemaService($config['app'], $config['seo']);
     $categories = new CategoryRepository($cache, $db);
@@ -74,6 +74,7 @@ if (! isset($GLOBALS['couponami'])) {
 
     $GLOBALS['couponami'] = [
         'config' => $config,
+        'db' => $db,
         'cache' => $cache,
         'csrf' => $csrf,
         'auth' => $auth,

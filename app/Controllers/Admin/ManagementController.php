@@ -43,7 +43,7 @@ final class ManagementController
         } else {
             $item = app('settingsRepository')->saveSection('feature_flags', array_map(static fn ($value): bool => (bool) $value, $payload));
         }
-        app('cache')->appendJsonLine('logs', 'audit.log', ['action' => 'save:' . $section, 'actor' => app('auth')->user()['username'] ?? 'guest', 'target' => $item['id'] ?? $section, 'created_at' => date('c')]);
+        audit_log('save:' . $section, $section, (int) ($item['id'] ?? 0), ['payload' => array_keys($payload)]);
         flash('success', ucfirst($section) . ' aggiornato.');
         return redirect('/admin/' . $section);
     }
@@ -57,7 +57,7 @@ final class ManagementController
         } elseif ($section === 'categories') {
             app('categoryRepository')->delete($id);
         }
-        app('cache')->appendJsonLine('logs', 'audit.log', ['action' => 'delete:' . $section, 'actor' => app('auth')->user()['username'] ?? 'guest', 'target' => $id, 'created_at' => date('c')]);
+        audit_log('delete:' . $section, $section, $id);
         flash('success', 'Elemento eliminato.');
         return redirect('/admin/' . $section);
     }
@@ -66,7 +66,7 @@ final class ManagementController
     {
         $status = strtoupper((string) request_input('status', 'DRAFT'));
         app('offerRepository')->updateStatus($id, $status);
-        app('cache')->appendJsonLine('logs', 'audit.log', ['action' => 'status:offers', 'actor' => app('auth')->user()['username'] ?? 'guest', 'target' => $id, 'status' => $status, 'created_at' => date('c')]);
+        audit_log('status:offers', 'offers', $id, ['status' => $status]);
         flash('success', 'Stato coupon aggiornato.');
         return redirect('/admin/offers');
     }
