@@ -1,0 +1,7 @@
+/storage/cache/*.json
+/storage/logs/*.log
+/storage/logs/*.jsonl
+/storage/sitemaps/*.xml
+!/storage/cache/.gitignore
+!/storage/logs/.gitignore
+!/storage/sitemaps/.gitignore
