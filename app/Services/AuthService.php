@@ -157,7 +157,7 @@ final class AuthService
         if ($this->pdo) {
             try {
                 $stmt = $this->pdo->prepare(
-                    "SELECT id, username, email, password_hash, display_name, role, is_active 
+                    "SELECT id, username, email, password_hash, display_name, role 
                      FROM users 
                      WHERE LOWER(username) = LOWER(?)
                        AND is_active = 1
