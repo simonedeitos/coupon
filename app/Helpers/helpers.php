@@ -99,17 +99,20 @@ function asset(string $path): string
 
 function css(string $file): string
 {
-    return asset('css/' . $file);
+    $basePath = (string) config('app.css_path', '/assets/css');
+    return rtrim($basePath, '/') . '/' . ltrim($file, '/');
 }
 
 function js(string $file): string
 {
-    return asset('js/' . $file);
+    $basePath = (string) config('app.js_path', '/assets/js');
+    return rtrim($basePath, '/') . '/' . ltrim($file, '/');
 }
 
 function image(string $file): string
 {
-    return asset('images/' . $file);
+    $basePath = (string) config('app.images_path', '/assets/images');
+    return rtrim($basePath, '/') . '/' . ltrim($file, '/');
 }
 
 function csrf_token(): string
@@ -122,7 +125,7 @@ function csrf_field(): string
     return '<input type="hidden" name="_token" value="' . e(csrf_token()) . '">';
 }
 
-function response_view(string $view, array $data = [], string $layout = 'frontend', int $status = 200): array
+function response_view(string $view, array $data = [], string $layout = 'app', int $status = 200): array
 {
     return Response::html(app('view')->render($view, $data, $layout), $status);
 }

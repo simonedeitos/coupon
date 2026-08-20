@@ -6,7 +6,6 @@ return [
     'name' => 'Couponami',
     'env' => getenv('APP_ENV') ?: 'production',
     'base_url' => rtrim(getenv('APP_URL') ?: 'https://couponami.it', '/'),
-    'app_name' => 'Couponami',
     'app_description' => 'Trova codici sconto, coupon e offerte online',
     'app_locale' => 'it_IT',
     'asset_url' => '/assets',

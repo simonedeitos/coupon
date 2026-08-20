@@ -2,8 +2,8 @@
 <html lang="it">
 <head>
     <?php echo app('view')->partial('layouts/partials/head', ['meta' => $meta ?? app('seo')->meta(['path' => request_path()])]); ?>
-    <link rel="stylesheet" href="/assets/css/style.css">
-    <script defer src="/assets/js/main.js"></script>
+    <link rel="stylesheet" href="<?php echo e(css('style.css')); ?>">
+    <script defer src="<?php echo e(js('main.js')); ?>"></script>
 </head>
 <body>
 <?php if (request_path() === '/admin'): ?>
