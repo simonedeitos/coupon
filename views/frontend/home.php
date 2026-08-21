@@ -1,8 +1,67 @@
 <main>
     <?php echo app('view')->partial('frontend/partials/hero', ['categories' => $categories, 'offers' => $offers, 'stores' => $stores, 'storesById' => $storesById, 'todayOffers' => $todayOffers ?? [], 'stats' => $stats ?? []]); ?>
-    <section id="categorie"><div class="container"><div class="section-head"><div><h2>Esplora per categoria</h2><p>Trova rapidamente le offerte che ti interessano.</p></div><a class="view-all" href="<?php echo e(url('/categorie')); ?>">Vedi tutte →</a></div><?php echo app('view')->partial('frontend/partials/category-grid', ['categories' => $categories]); ?></div></section>
-    <section id="coupon"><div class="container"><div class="section-head"><div><h2>Coupon in evidenza</h2><p>Le offerte più popolari su Couponami.</p></div><a class="view-all" href="<?php echo e(url('/coupon')); ?>">Vedi tutti →</a></div><?php echo app('view')->partial('frontend/partials/coupon-grid', ['offers' => $offers]); ?></div></section>
-    <section class="stores-band" id="negozi"><div class="container"><div class="section-head"><div><h2>Negozi popolari</h2><p>Brand con il maggior numero di offerte attive.</p></div><a class="view-all" href="<?php echo e(url('/negozi')); ?>">Tutti i negozi →</a></div><?php echo app('view')->partial('frontend/partials/store-grid', ['stores' => $stores]); ?></div></section>
-    <section id="ultime-offerte"><div class="container"><div class="section-head"><div><h2>Ultime offerte</h2><p>Le promozioni aggiunte più recentemente.</p></div><a class="view-all" href="<?php echo e(url('/coupon?ordine=recenti')); ?>">Vedi tutte →</a></div><div class="latest-layout"><?php echo app('view')->partial('frontend/partials/latest-offers', ['offers' => $latest, 'storesById' => $storesById]); ?><?php echo app('view')->partial('frontend/partials/newsletter'); ?></div></div></section>
-    <section class="cta"><div class="container"><div class="cta-box"><h2>Un buon affare è sempre una buona idea.</h2><p>Cerca tra categorie, negozi e coupon verificati.</p><a class="cta-button" href="<?php echo e(url('/coupon')); ?>">Scopri i coupon</a></div></div></section>
+
+    <section id="categorie">
+        <div class="container">
+            <div class="section-head">
+                <div>
+                    <h2>Esplora per categoria</h2>
+                    <p>Trova rapidamente le offerte che ti interessano.</p>
+                </div>
+                <a class="view-all" href="<?php echo e(url('/categorie')); ?>">Vedi tutte →</a>
+            </div>
+            <?php echo app('view')->partial('frontend/partials/category-grid', ['categories' => $categories]); ?>
+        </div>
+    </section>
+
+    <section id="coupon">
+        <div class="container">
+            <div class="section-head">
+                <div>
+                    <h2>Coupon in evidenza</h2>
+                    <p>Le offerte più popolari su Couponami.</p>
+                </div>
+                <a class="view-all" href="<?php echo e(url('/coupon')); ?>">Vedi tutti →</a>
+            </div>
+            <?php echo app('view')->partial('frontend/partials/coupon-grid', ['offers' => $offers]); ?>
+        </div>
+    </section>
+
+    <section class="stores-band" id="negozi">
+        <div class="container">
+            <div class="section-head">
+                <div>
+                    <h2>Negozi popolari</h2>
+                    <p>Brand con il maggior numero di offerte attive.</p>
+                </div>
+                <a class="view-all" href="<?php echo e(url('/negozi')); ?>">Tutti i negozi →</a>
+            </div>
+            <?php echo app('view')->partial('frontend/partials/store-grid', ['stores' => $stores]); ?>
+        </div>
+    </section>
+
+    <section id="ultime-offerte">
+        <div class="container">
+            <div class="section-head">
+                <div>
+                    <h2>Ultime offerte</h2>
+                    <p>Le promozioni aggiunte più recentemente.</p>
+                </div>
+                <a class="view-all" href="<?php echo e(url('/coupon?ordine=recenti')); ?>">Vedi tutte →</a>
+            </div>
+            <div class="latest-layout">
+                <?php echo app('view')->partial('frontend/partials/latest-offers', ['offers' => $latest, 'storesById' => $storesById]); ?>
+            </div>
+        </div>
+    </section>
+
+    <section class="cta">
+        <div class="container">
+            <div class="cta-box">
+                <h2>Un buon affare è sempre una buona idea.</h2>
+                <p>Cerca tra categorie, negozi e coupon verificati.</p>
+                <a class="cta-button" href="<?php echo e(url('/coupon')); ?>">Scopri i coupon</a>
+            </div>
+        </div>
+    </section>
 </main>

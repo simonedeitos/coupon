@@ -16,49 +16,75 @@
     }
   };
 
+  const revealCodeInline = (trigger, code) => {
+    if (!trigger || !code) {
+      return;
+    }
+
+    if (trigger.tagName === 'BUTTON') {
+      trigger.textContent = code;
+      trigger.classList.add('is-code-revealed');
+      trigger.setAttribute('aria-label', `Codice coupon ${code}`);
+      return;
+    }
+
+    const target = trigger.closest('[data-offer-code-container]') || trigger.parentElement;
+    if (!target) {
+      return;
+    }
+    let inlineCode = target.querySelector('.inline-coupon-code');
+    if (!inlineCode) {
+      inlineCode = document.createElement('span');
+      inlineCode.className = 'inline-coupon-code';
+      target.appendChild(inlineCode);
+    }
+    inlineCode.textContent = code;
+  };
+
   const modal = document.querySelector('[data-coupon-modal]');
   const codeTarget = modal?.querySelector('[data-coupon-code]');
-  if (modal && codeTarget) {
-    const closeModal = () => {
-      modal.hidden = true;
-      document.body.classList.remove('modal-open');
-    };
+  const closeModal = () => {
+    if (!modal) {
+      return;
+    }
+    modal.hidden = true;
+    document.body.classList.remove('modal-open');
+  };
 
-    const openModal = (code, trackUrl) => {
-      const safeTrackUrl = normalizeTrackUrl(trackUrl);
-      if (safeTrackUrl) {
-        window.open(safeTrackUrl, '_blank', 'noopener,noreferrer');
+  document.addEventListener('click', (event) => {
+    const trigger = event.target.closest('[data-offer-code]');
+    if (trigger) {
+      const code = trigger.getAttribute('data-offer-code') || '';
+      const trackUrl = normalizeTrackUrl(trigger.getAttribute('data-offer-track') || '');
+
+      if (trackUrl) {
+        window.open(trackUrl, '_blank', 'noopener,noreferrer');
       }
 
-      codeTarget.textContent = code;
-      modal.hidden = false;
-      document.body.classList.add('modal-open');
+      revealCodeInline(trigger, code);
 
-      if (navigator.clipboard?.writeText) {
+      if (modal && codeTarget) {
+        codeTarget.textContent = code;
+        modal.hidden = false;
+        document.body.classList.add('modal-open');
+      }
+
+      if (navigator.clipboard?.writeText && code) {
         navigator.clipboard.writeText(code).catch(() => {});
       }
-    };
+      return;
+    }
 
-    document.addEventListener('click', (event) => {
-      const trigger = event.target.closest('[data-offer-code]');
-      if (trigger) {
-        const code = trigger.getAttribute('data-offer-code') || '';
-        const trackUrl = normalizeTrackUrl(trigger.getAttribute('data-offer-track') || '');
-        openModal(code, trackUrl);
-        return;
-      }
+    if (modal && (event.target.matches('[data-close-modal]') || event.target === modal)) {
+      closeModal();
+    }
+  });
 
-      if (event.target.matches('[data-close-modal]') || event.target === modal) {
-        closeModal();
-      }
-    });
-
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && !modal.hidden) {
-        closeModal();
-      }
-    });
-  }
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && modal && !modal.hidden) {
+      closeModal();
+    }
+  });
 
   const heroRotator = document.querySelector('[data-hero-offer-rotator]');
   if (heroRotator) {
@@ -113,6 +139,8 @@
         if (codeButton && directLink) {
           if (offer.code) {
             codeButton.hidden = false;
+            codeButton.textContent = 'Mostra codice';
+            codeButton.classList.remove('is-code-revealed');
             codeButton.setAttribute('data-offer-code', offer.code);
             codeButton.setAttribute('data-offer-track', normalizeTrackUrl(offer.track_url || ''));
             directLink.hidden = true;

@@ -120,11 +120,33 @@ final class TradeDoublerImportService
     private static function field(array $item, array $keys, $default = null)
     {
         foreach ($keys as $key) {
-            if (isset($item[$key]) && $item[$key] !== '' && $item[$key] !== null) {
-                return $item[$key];
+            $value = self::fieldValue($item, (string) $key);
+            if ($value !== '' && $value !== null) {
+                return $value;
             }
         }
         return $default;
+    }
+
+    private static function fieldValue(array $item, string $key)
+    {
+        if (array_key_exists($key, $item)) {
+            return $item[$key];
+        }
+
+        if (! str_contains($key, '.')) {
+            return null;
+        }
+
+        $cursor = $item;
+        foreach (explode('.', $key) as $segment) {
+            if (! is_array($cursor) || ! array_key_exists($segment, $cursor)) {
+                return null;
+            }
+            $cursor = $cursor[$segment];
+        }
+
+        return $cursor;
     }
 
     private static function toMysqlDate($raw): ?string
@@ -153,7 +175,7 @@ final class TradeDoublerImportService
         return is_numeric($normalized) ? (float) $normalized : null;
     }
 
-    private static function parseDiscount(array $item): array
+    private static function parseDiscount(array $item, string $title = ''): array
     {
         $percentRaw = self::field($item, ['discountPercent', 'discountPercentage', 'percentOff', 'discountRate'], null);
         $amountRaw = self::field($item, ['discountAmount', 'amountOff', 'fixedDiscount', 'discountValue'], null);
@@ -178,7 +200,14 @@ final class TradeDoublerImportService
             if (str_contains($fallbackText, '%')) {
                 return ['type' => 'PERCENT', 'value' => round($fallbackValue, 2)];
             }
-            if (preg_match('/[€$£]|EUR|USD|GBP/i', $fallbackText)) {
+            if (preg_match('/€|EUR|euro/i', $fallbackText)) {
+                return ['type' => 'AMOUNT', 'value' => round($fallbackValue, 2)];
+            }
+
+            if (str_contains($title, '%')) {
+                return ['type' => 'PERCENT', 'value' => round($fallbackValue, 2)];
+            }
+            if (preg_match('/€|EUR|euro/i', $title)) {
                 return ['type' => 'AMOUNT', 'value' => round($fallbackValue, 2)];
             }
         }
@@ -208,18 +237,18 @@ final class TradeDoublerImportService
         foreach ($items as $item) {
             try {
                 $externalId = (string) self::field($item, ['voucherId', 'productId', 'id'], '');
-                $programId = (string) self::field($item, ['programId'], '');
-                $programName = (string) self::field($item, ['programName', 'program', 'advertiserName'], 'Store senza nome');
+                $programId = (string) self::field($item, ['programId', 'program.id', 'advertiser.id', 'merchant.id'], '');
+                $programName = (string) self::field($item, ['programName', 'program', 'advertiserName', 'program.name', 'advertiser.name', 'merchant.name'], 'Store senza nome');
                 $title = (string) self::field($item, ['title', 'name'], $programName);
                 $description = (string) self::field($item, ['description', 'shortDescription'], '');
                 $code = (string) self::field($item, ['code', 'voucherCode'], '');
-                $discount = self::parseDiscount($item);
-                $url = (string) self::field($item, ['trackingUrl', 'clickUrl', 'deepLink', 'link', 'url'], '');
+                $discount = self::parseDiscount($item, $title);
+                $url = (string) self::field($item, ['trackingUrl', 'clickUrl', 'deepLink', 'landingUrl', 'productUrl', 'link', 'url'], '');
                 $startDate = self::toMysqlDate(self::field($item, ['startDate', 'validFrom', 'start']));
                 $endDate = self::toMysqlDate(self::field($item, ['endDate', 'validTo', 'end']));
-                $categoryName = (string) self::field($item, ['categoryName', 'category'], '');
-                $logoUrl = (string) self::field($item, ['logoUrl', 'advertiserLogoUrl', 'programLogo', 'imageUrl', 'logo'], '');
-                $storeDescription = (string) self::field($item, ['programDescription', 'description', 'shortDescription'], '');
+                $categoryName = (string) self::field($item, ['categoryName', 'category', 'category.name', 'productCategoryName', 'programCategory'], '');
+                $logoUrl = (string) self::field($item, ['logoUrl', 'advertiserLogoUrl', 'programLogo', 'imageUrl', 'logo', 'image.url', 'advertiser.logoUrl', 'program.logoUrl'], '');
+                $storeDescription = (string) self::field($item, ['programDescription', 'advertiserDescription', 'program.description', 'advertiser.description', 'description', 'shortDescription'], '');
 
                 if ($externalId === '' || $url === '') {
                     $errors++;
