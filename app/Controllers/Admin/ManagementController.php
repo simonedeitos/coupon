@@ -43,7 +43,8 @@ final class ManagementController
         } else {
             $item = app('settingsRepository')->saveSection('feature_flags', array_map(static fn ($value): bool => (bool) $value, $payload));
         }
-        app('cache')->appendJsonLine('logs', 'audit.log', ['action' => 'save:' . $section, 'actor' => app('auth')->user()['username'] ?? 'guest', 'target' => $item['id'] ?? $section, 'created_at' => date('c')]);
+        $entityId = isset($item['id']) ? (int) $item['id'] : null;
+        $this->writeAudit('save:' . $section, $section, $entityId, ['payload_keys' => array_keys($payload)]);
         flash('success', ucfirst($section) . ' aggiornato.');
         return redirect('/admin/' . $section);
     }
@@ -57,7 +58,7 @@ final class ManagementController
         } elseif ($section === 'categories') {
             app('categoryRepository')->delete($id);
         }
-        app('cache')->appendJsonLine('logs', 'audit.log', ['action' => 'delete:' . $section, 'actor' => app('auth')->user()['username'] ?? 'guest', 'target' => $id, 'created_at' => date('c')]);
+        $this->writeAudit('delete:' . $section, $section, $id);
         flash('success', 'Elemento eliminato.');
         return redirect('/admin/' . $section);
     }
@@ -66,9 +67,45 @@ final class ManagementController
     {
         $status = strtoupper((string) request_input('status', 'DRAFT'));
         app('offerRepository')->updateStatus($id, $status);
-        app('cache')->appendJsonLine('logs', 'audit.log', ['action' => 'status:offers', 'actor' => app('auth')->user()['username'] ?? 'guest', 'target' => $id, 'status' => $status, 'created_at' => date('c')]);
+        $this->writeAudit('status:offers', 'offers', $id, ['status' => $status]);
         flash('success', 'Stato coupon aggiornato.');
         return redirect('/admin/offers');
+    }
+
+    private function writeAudit(string $action, string $entityType, ?int $entityId, array $extra = []): void
+    {
+        $user = app('auth')->user();
+        $userId = isset($user['id']) ? (int) $user['id'] : null;
+        $actor = $user['username'] ?? 'guest';
+        $ip = $_SERVER['REMOTE_ADDR'] ?? null;
+
+        // Scrivi nel DB
+        $db = app('db');
+        if ($db !== null) {
+            try {
+                $db->prepare(
+                    'INSERT INTO audit_logs (user_id, action, entity_type, entity_id, ip_address, payload, created_at)
+                     VALUES (?, ?, ?, ?, INET6_ATON(?), ?, NOW())'
+                )->execute([
+                    $userId,
+                    $action,
+                    $entityType,
+                    $entityId,
+                    $ip,
+                    json_encode(['actor' => $actor] + $extra, JSON_UNESCAPED_UNICODE),
+                ]);
+            } catch (\Throwable $e) {
+                error_log('ManagementController::writeAudit DB failed: ' . $e->getMessage());
+            }
+        }
+
+        // Mantieni anche il log su file come backup
+        app('cache')->appendJsonLine('logs', 'audit.log', [
+            'action' => $action,
+            'actor' => $actor,
+            'target' => $entityId ?? $entityType,
+            'created_at' => date('c'),
+        ] + $extra);
     }
 
     private function sectionData(string $section): array

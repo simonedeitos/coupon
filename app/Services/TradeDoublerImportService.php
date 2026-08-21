@@ -150,12 +150,48 @@ final class TradeDoublerImportService
             $num = (float) $raw;
             if ($num > 0 && $num <= 1) {
                 $percent = round($num * 100, 2);
-                $formatted = rtrim(rtrim((string) $percent, '0'), '.');
-                return $formatted . '%';
+                return rtrim(rtrim((string) $percent, '0'), '.');
             }
-            return (string) $raw . '%';
+            return (string) $raw;
         }
-        return (string) $raw;
+        // Rimuovi simbolo % o valuta e restituisci solo il numero
+        $cleaned = preg_replace('/[^0-9.,]/', '', (string) $raw);
+        $cleaned = str_replace(',', '.', $cleaned);
+        return $cleaned !== '' ? $cleaned : (string) $raw;
+    }
+
+    /**
+     * Determina il tipo di sconto (PERCENT o AMOUNT) dal dato grezzo del feed.
+     */
+    private static function discountType($raw, array $item): ?string
+    {
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+        // Campi espliciti del feed TradeDoubler
+        if (! empty($item['discountPercentage'])) {
+            return 'PERCENT';
+        }
+        if (! empty($item['discountAmount']) || ! empty($item['discountValue'])) {
+            return 'AMOUNT';
+        }
+        // Analisi del valore grezzo
+        $str = (string) $raw;
+        if (str_contains($str, '%')) {
+            return 'PERCENT';
+        }
+        if (preg_match('/[€$£]|EUR|USD|GBP/i', $str)) {
+            return 'AMOUNT';
+        }
+        // Valore numerico: se <= 1 probabile moltiplicatore, se > 100 probabile importo assoluto
+        if (is_numeric($str)) {
+            $num = (float) $str;
+            if ($num > 100) {
+                return 'AMOUNT';
+            }
+            return 'PERCENT';
+        }
+        return null;
     }
 
     /**
@@ -185,12 +221,15 @@ final class TradeDoublerImportService
                 $title = (string) self::field($item, ['title', 'name'], $programName);
                 $description = (string) self::field($item, ['description', 'shortDescription'], '');
                 $code = (string) self::field($item, ['code', 'voucherCode'], '');
-                $discountRaw = self::field($item, ['discount', 'discountAmount', 'value', 'discountValue', 'discountText'], null);
+                $discountRaw = self::field($item, ['discount', 'discountAmount', 'value', 'discountValue', 'discountText', 'discountPercentage'], null);
                 $discount = self::formatDiscount($discountRaw);
+                $discountType = self::discountType($discountRaw, $item);
                 $url = (string) self::field($item, ['trackingUrl', 'clickUrl', 'deepLink', 'link', 'url'], '');
                 $startDate = self::toMysqlDate(self::field($item, ['startDate', 'validFrom', 'start']));
                 $endDate = self::toMysqlDate(self::field($item, ['endDate', 'validTo', 'end']));
                 $categoryName = (string) self::field($item, ['categoryName', 'category'], '');
+                $logoUrl = (string) self::field($item, ['logoUrl', 'programLogo', 'imageUrl', 'logo'], '');
+                $storeDescription = (string) self::field($item, ['programDescription', 'description', 'shortDescription'], '');
 
                 if ($externalId === '' || $url === '') {
                     $errors++;
@@ -209,17 +248,17 @@ final class TradeDoublerImportService
                     continue;
                 }
 
-                $storeId = $this->ensureStore($programName);
-                $programDbId = $this->ensureProgram($networkId, $storeId, $programId, $programName);
                 $categoryId = $categoryName !== '' ? $this->ensureCategory($categoryName) : null;
+                $storeId = $this->ensureStore($programName, $logoUrl, $storeDescription, $categoryId);
+                $programDbId = $this->ensureProgram($networkId, $storeId, $programId, $programName);
 
                 $slug = Str::slug($title . '-' . $externalId);
                 $offerType = $code !== '' ? 'CODICE' : 'OFFERTA';
 
                 $insertOffer = $this->db->prepare(
                     'INSERT INTO offers
-                        (store_id, category_id, title, slug, description, offer_type, coupon_code, affiliate_url, external_id, dedupe_hash, status, badge, starts_at, expires_at, is_featured)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'ACTIVE\', ?, ?, ?, ?)'
+                        (store_id, category_id, title, slug, description, offer_type, coupon_code, affiliate_url, external_id, dedupe_hash, status, badge, discount_type, starts_at, expires_at, is_featured)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'ACTIVE\', ?, ?, ?, ?, ?)'
                 );
                 $insertOffer->execute([
                     $storeId,
@@ -233,6 +272,7 @@ final class TradeDoublerImportService
                     $externalId,
                     $hash,
                     $discount,
+                    $discountType,
                     $startDate,
                     $endDate,
                     $markFeatured ? 1 : 0,
@@ -240,15 +280,14 @@ final class TradeDoublerImportService
                 $offerId = (int) $this->db->lastInsertId();
 
                 $insertMapping = $this->db->prepare(
-                    'INSERT INTO affiliate_mappings (offer_id, program_id, external_id, external_hash, raw_payload)
-                     VALUES (?, ?, ?, ?, ?)'
+                    'INSERT INTO affiliate_mappings (offer_id, program_id, external_id, external_hash)
+                     VALUES (?, ?, ?, ?)'
                 );
                 $insertMapping->execute([
                     $offerId,
                     $programDbId,
                     $externalId,
                     $hash,
-                    json_encode($item, JSON_UNESCAPED_UNICODE),
                 ]);
 
                 $imported++;
@@ -280,20 +319,48 @@ final class TradeDoublerImportService
         return (int) $this->db->lastInsertId();
     }
 
-    private function ensureStore(string $name): int
+    private function ensureStore(string $name, string $logoUrl = '', string $description = '', ?int $categoryId = null): int
     {
         $slug = Str::slug($name);
         $stmt = $this->db->prepare('SELECT id FROM stores WHERE slug = ? LIMIT 1');
         $stmt->execute([$slug]);
         $row = $stmt->fetch();
         if ($row) {
+            // Aggiorna i campi mancanti se disponibili
+            if ($logoUrl !== '' || $description !== '' || $categoryId !== null) {
+                $updates = [];
+                $params = [];
+                if ($logoUrl !== '') {
+                    $updates[] = 'logo_path = COALESCE(NULLIF(logo_path, \'\'), ?)';
+                    $params[] = $logoUrl;
+                }
+                if ($description !== '') {
+                    $updates[] = 'description = COALESCE(NULLIF(description, \'\'), ?)';
+                    $params[] = $description;
+                }
+                if ($categoryId !== null) {
+                    $updates[] = 'category_id = COALESCE(category_id, ?)';
+                    $params[] = $categoryId;
+                }
+                if (! empty($updates)) {
+                    $params[] = (int) $row['id'];
+                    $this->db->prepare('UPDATE stores SET ' . implode(', ', $updates) . ' WHERE id = ?')
+                        ->execute($params);
+                }
+            }
             return (int) $row['id'];
         }
 
         $insert = $this->db->prepare(
-            'INSERT INTO stores (name, slug, is_active) VALUES (?, ?, 1)'
+            'INSERT INTO stores (name, slug, description, logo_path, category_id, is_active) VALUES (?, ?, ?, ?, ?, 1)'
         );
-        $insert->execute([$name, $slug]);
+        $insert->execute([
+            $name,
+            $slug,
+            $description !== '' ? $description : null,
+            $logoUrl !== '' ? $logoUrl : null,
+            $categoryId,
+        ]);
         return (int) $this->db->lastInsertId();
     }
 
@@ -343,8 +410,8 @@ final class TradeDoublerImportService
         try {
             $status = $errors > 0 ? 'ERROR' : ($duplicates === $processed ? 'DUPLICATE' : 'UPDATED');
             $stmt = $this->db->prepare(
-                'INSERT INTO import_logs (network_id, network_name, status, processed_count, duplicate_count, error_count)
-                 VALUES (?, \'TradeDoubler\', ?, ?, ?, ?)'
+                'INSERT INTO import_logs (network_id, status, processed_count, duplicate_count, error_count)
+                 VALUES (?, ?, ?, ?, ?)'
             );
             $stmt->execute([$networkId, $status, $imported, $duplicates, $errors]);
         } catch (\Throwable $e) {

@@ -8,14 +8,34 @@ final class OfferHelper
 {
     public static function formatDiscount(array $offer): string
     {
-        $discount = (string) ($offer['discount'] ?? '');
-        if ($discount !== '' && $discount !== '0') {
+        $discountType = strtoupper((string) ($offer['discount_type'] ?? ''));
+        $discount = trim((string) ($offer['discount'] ?? ''));
+        $numericValue = is_numeric($discount) ? (float) $discount : null;
+
+        // Se abbiamo tipo esplicito e valore numerico > 0
+        if ($discountType === 'PERCENT' && $numericValue !== null && $numericValue > 0) {
+            return 'SCONTO ' . rtrim(rtrim(number_format($numericValue, 2), '0'), '.') . '%';
+        }
+        if ($discountType === 'AMOUNT' && $numericValue !== null && $numericValue > 0) {
+            return 'SCONTO ' . rtrim(rtrim(number_format($numericValue, 2), '0'), '.') . '€';
+        }
+
+        // Valore già formattato (es. "20%", "10€", "5 EUR")
+        if ($discount !== '' && $discount !== '0' && $discount !== 'null') {
+            // Contiene già simbolo % o € -> restituisci come badge SCONTO
+            if (str_contains($discount, '%') || preg_match('/[€$£]/', $discount)) {
+                return 'SCONTO ' . $discount;
+            }
+            // Valore numerico senza tipo: tenta di interpretarlo come percentuale solo se <= 100
+            if ($numericValue !== null && $numericValue > 0) {
+                return 'SCONTO ' . rtrim(rtrim(number_format($numericValue, 2), '0'), '.') . '%';
+            }
+            // Stringa libera (es. "Gratis spedizione") -> restituisci così
             return $discount;
         }
-        if (($offer['type'] ?? '') === 'OFFERTA') {
-            return 'Offerta';
-        }
-        return 'Sconto';
+
+        // Nessun valore di sconto -> non mostrare nulla
+        return '';
     }
 
     public static function formatExpiry(string $expiresAt): string
