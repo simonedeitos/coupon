@@ -38,6 +38,14 @@ foreach ($routes as $route) {
             return;
         }
     }
+    if (
+        $method === 'GET'
+        && ! str_starts_with($path, '/admin')
+        && ! str_starts_with($path, '/api')
+        && ! str_starts_with($path, '/go/')
+    ) {
+        app('analytics')->logPageView($path);
+    }
     [$class, $action] = $route['handler'];
     $response = (new $class())->{$action}(...array_values($params));
     send_response($response);

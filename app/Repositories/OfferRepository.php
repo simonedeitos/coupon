@@ -28,6 +28,7 @@ final class OfferRepository
             'description' => $r['description'] ?? '',
             'discount' => $r['badge'] ?? $r['discount'] ?? '',
             'discount_type' => $r['discount_type'] ?? null,
+            'discount_value' => isset($r['discount_value']) && $r['discount_value'] !== null ? (float) $r['discount_value'] : null,
             'code' => $r['coupon_code'] ?? $r['code'] ?? '',
             'affiliate_url' => $r['affiliate_url'] ?? '',
             'status' => $r['status'],
@@ -54,8 +55,7 @@ final class OfferRepository
         }
 
         try {
-            // NB: la tabella "offers" ora ha click_count e discount_type
-            $sql = 'SELECT id, slug, store_id, category_id, offer_type, title, description, badge, coupon_code, affiliate_url, status, is_featured, expires_at, priority, external_id, dedupe_hash, click_count, discount_type
+            $sql = 'SELECT id, slug, store_id, category_id, offer_type, title, description, badge, coupon_code, affiliate_url, status, is_featured, expires_at, priority, external_id, dedupe_hash, click_count, discount_type, discount_value
                     FROM offers
                     WHERE 1 = 1';
             $params = [];
@@ -112,12 +112,18 @@ final class OfferRepository
             return [];
         }
         try {
-            // Prima prova con is_featured=1; se vuoto fa fallback sui più cliccati.
             $stmt = $this->db->prepare(
-                "SELECT * FROM offers
-                 WHERE status = 'ACTIVE' AND is_featured = 1
-                   AND (expires_at IS NULL OR expires_at > NOW())
-                 ORDER BY click_count DESC, priority DESC, created_at DESC
+                "SELECT o.*, COALESCE(rc.recent_clicks, 0) AS recent_clicks
+                 FROM offers o
+                 LEFT JOIN (
+                    SELECT offer_id, COUNT(*) AS recent_clicks
+                    FROM clicks
+                    WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                    GROUP BY offer_id
+                 ) rc ON rc.offer_id = o.id
+                 WHERE o.status = 'ACTIVE' AND o.is_featured = 1
+                   AND (o.expires_at IS NULL OR o.expires_at > NOW())
+                 ORDER BY recent_clicks DESC, o.click_count DESC, o.priority DESC, o.created_at DESC
                  LIMIT ?",
             );
             $stmt->execute([$limit]);
@@ -125,12 +131,18 @@ final class OfferRepository
             if (! empty($rows)) {
                 return array_map([self::class, 'mapRow'], $rows);
             }
-            // Fallback automatico: top per click_count
             $stmt = $this->db->prepare(
-                "SELECT * FROM offers
-                 WHERE status = 'ACTIVE'
-                   AND (expires_at IS NULL OR expires_at > NOW())
-                 ORDER BY click_count DESC, priority DESC, created_at DESC
+                "SELECT o.*, COALESCE(rc.recent_clicks, 0) AS recent_clicks
+                 FROM offers o
+                 LEFT JOIN (
+                    SELECT offer_id, COUNT(*) AS recent_clicks
+                    FROM clicks
+                    WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                    GROUP BY offer_id
+                 ) rc ON rc.offer_id = o.id
+                 WHERE o.status = 'ACTIVE'
+                   AND (o.expires_at IS NULL OR o.expires_at > NOW())
+                 ORDER BY recent_clicks DESC, o.click_count DESC, o.priority DESC, o.created_at DESC
                  LIMIT ?",
             );
             $stmt->execute([$limit]);
@@ -141,19 +153,24 @@ final class OfferRepository
         }
     }
 
-    public function topToday(int $limit = 10): array
+    public function topClickedToday(int $limit = 10): array
     {
         if ($this->db === null) {
             return [];
         }
         try {
             $stmt = $this->db->prepare(
-                "SELECT o.*, COUNT(c.id) AS today_clicks
+                "SELECT o.*, COALESCE(tc.today_clicks, 0) AS today_clicks
                  FROM offers o
-                 LEFT JOIN clicks c ON c.offer_id = o.id AND DATE(c.created_at) = CURDATE()
-                 WHERE o.status = 'ACTIVE' AND (o.expires_at IS NULL OR o.expires_at > NOW())
-                 GROUP BY o.id
-                 ORDER BY today_clicks DESC, o.click_count DESC, o.created_at DESC
+                 LEFT JOIN (
+                    SELECT offer_id, COUNT(*) AS today_clicks
+                    FROM clicks
+                    WHERE DATE(created_at) = CURDATE()
+                    GROUP BY offer_id
+                 ) tc ON tc.offer_id = o.id
+                 WHERE o.status = 'ACTIVE'
+                   AND (o.expires_at IS NULL OR o.expires_at > NOW())
+                 ORDER BY today_clicks DESC, o.click_count DESC, o.priority DESC, o.created_at DESC
                  LIMIT ?",
             );
             $stmt->execute([$limit]);
@@ -161,22 +178,36 @@ final class OfferRepository
             if (! empty($rows)) {
                 return array_map([self::class, 'mapRow'], $rows);
             }
-            // Fallback: offerte degli ultimi 7 giorni
             $stmt = $this->db->prepare(
-                "SELECT o.*, COUNT(c.id) AS today_clicks
-                 FROM offers o
-                 LEFT JOIN clicks c ON c.offer_id = o.id AND c.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-                 WHERE o.status = 'ACTIVE' AND (o.expires_at IS NULL OR o.expires_at > NOW())
-                 GROUP BY o.id
-                 ORDER BY today_clicks DESC, o.click_count DESC, o.created_at DESC
+                "SELECT * FROM offers
+                 WHERE status = 'ACTIVE' AND is_featured = 1
+                   AND (expires_at IS NULL OR expires_at > NOW())
+                 ORDER BY priority DESC, created_at DESC
+                 LIMIT ?",
+            );
+            $stmt->execute([$limit]);
+            $rows = $stmt->fetchAll();
+            if (! empty($rows)) {
+                return array_map([self::class, 'mapRow'], $rows);
+            }
+            $stmt = $this->db->prepare(
+                "SELECT * FROM offers
+                 WHERE status = 'ACTIVE'
+                   AND (expires_at IS NULL OR expires_at > NOW())
+                 ORDER BY click_count DESC, priority DESC, created_at DESC
                  LIMIT ?",
             );
             $stmt->execute([$limit]);
             return array_map([self::class, 'mapRow'], $stmt->fetchAll());
         } catch (\Throwable $e) {
-            error_log('OfferRepository::topToday failed: ' . $e->getMessage());
+            error_log('OfferRepository::topClickedToday failed: ' . $e->getMessage());
             return [];
         }
+    }
+
+    public function topToday(int $limit = 10): array
+    {
+        return $this->topClickedToday($limit);
     }
 
     public function latest(int $limit = 4): array
@@ -285,9 +316,14 @@ final class OfferRepository
             if (! empty($payload['id'])) {
                 $stmt = $this->db->prepare(
                     'UPDATE offers SET store_id = ?, category_id = ?, offer_type = ?, title = ?, slug = ?, description = ?,
-                        badge = ?, discount_type = ?, coupon_code = ?, affiliate_url = ?, status = ?, is_featured = ?, expires_at = ?, priority = ?
+                        badge = ?, discount_type = ?, discount_value = ?, coupon_code = ?, affiliate_url = ?, status = ?, is_featured = ?, expires_at = ?, priority = ?
                      WHERE id = ?'
                 );
+                $discountType = strtoupper((string) ($payload['discount_type'] ?? 'NONE'));
+                $discountValue = is_numeric($payload['discount_value'] ?? null) ? (float) $payload['discount_value'] : null;
+                if ($discountType === 'NONE') {
+                    $discountValue = null;
+                }
                 $stmt->execute([
                     (int) ($payload['store_id'] ?? 0),
                     (int) ($payload['category_id'] ?? 0),
@@ -296,7 +332,8 @@ final class OfferRepository
                     $payload['slug'],
                     $payload['description'] ?? null,
                     $payload['discount'] ?? $payload['badge'] ?? null,
-                    ! empty($payload['discount_type']) ? strtoupper((string) $payload['discount_type']) : null,
+                    in_array($discountType, ['PERCENT', 'AMOUNT', 'NONE'], true) ? $discountType : 'NONE',
+                    $discountValue,
                     $payload['code'] ?? null,
                     $payload['affiliate_url'] ?? null,
                     $status,
@@ -309,9 +346,14 @@ final class OfferRepository
             }
 
             $stmt = $this->db->prepare(
-                'INSERT INTO offers (store_id, category_id, offer_type, title, slug, description, badge, discount_type, coupon_code, affiliate_url, status, is_featured, expires_at, priority)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                'INSERT INTO offers (store_id, category_id, offer_type, title, slug, description, badge, discount_type, discount_value, coupon_code, affiliate_url, status, is_featured, expires_at, priority)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
+            $discountType = strtoupper((string) ($payload['discount_type'] ?? 'NONE'));
+            $discountValue = is_numeric($payload['discount_value'] ?? null) ? (float) $payload['discount_value'] : null;
+            if ($discountType === 'NONE') {
+                $discountValue = null;
+            }
             $stmt->execute([
                 (int) ($payload['store_id'] ?? 0),
                 (int) ($payload['category_id'] ?? 0),
@@ -320,7 +362,8 @@ final class OfferRepository
                 $payload['slug'],
                 $payload['description'] ?? null,
                 $payload['discount'] ?? $payload['badge'] ?? null,
-                ! empty($payload['discount_type']) ? strtoupper((string) $payload['discount_type']) : null,
+                in_array($discountType, ['PERCENT', 'AMOUNT', 'NONE'], true) ? $discountType : 'NONE',
+                $discountValue,
                 $payload['code'] ?? null,
                 $payload['affiliate_url'] ?? null,
                 $status,

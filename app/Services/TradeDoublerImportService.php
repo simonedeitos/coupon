@@ -141,57 +141,49 @@ final class TradeDoublerImportService
         return $ts !== false ? date('Y-m-d H:i:s', $ts) : null;
     }
 
-    private static function formatDiscount($raw): ?string
+    private static function toDecimal($raw): ?float
     {
         if ($raw === null || $raw === '') {
             return null;
         }
         if (is_numeric($raw)) {
-            $num = (float) $raw;
-            if ($num > 0 && $num <= 1) {
-                $percent = round($num * 100, 2);
-                return rtrim(rtrim((string) $percent, '0'), '.');
-            }
-            return (string) $raw;
+            return (float) $raw;
         }
-        // Rimuovi simbolo % o valuta e restituisci solo il numero
-        $cleaned = preg_replace('/[^0-9.,]/', '', (string) $raw);
-        $cleaned = str_replace(',', '.', $cleaned);
-        return $cleaned !== '' ? $cleaned : (string) $raw;
+        $normalized = str_replace(',', '.', preg_replace('/[^0-9,.\-]/', '', (string) $raw) ?? '');
+        return is_numeric($normalized) ? (float) $normalized : null;
     }
 
-    /**
-     * Determina il tipo di sconto (PERCENT o AMOUNT) dal dato grezzo del feed.
-     */
-    private static function discountType($raw, array $item): ?string
+    private static function parseDiscount(array $item): array
     {
-        if ($raw === null || $raw === '') {
-            return null;
-        }
-        // Campi espliciti del feed TradeDoubler
-        if (! empty($item['discountPercentage'])) {
-            return 'PERCENT';
-        }
-        if (! empty($item['discountAmount']) || ! empty($item['discountValue'])) {
-            return 'AMOUNT';
-        }
-        // Analisi del valore grezzo
-        $str = (string) $raw;
-        if (str_contains($str, '%')) {
-            return 'PERCENT';
-        }
-        if (preg_match('/[€$£]|EUR|USD|GBP/i', $str)) {
-            return 'AMOUNT';
-        }
-        // Valore numerico: se <= 1 probabile moltiplicatore, se > 100 probabile importo assoluto
-        if (is_numeric($str)) {
-            $num = (float) $str;
-            if ($num > 100) {
-                return 'AMOUNT';
+        $percentRaw = self::field($item, ['discountPercent', 'discountPercentage', 'percentOff', 'discountRate'], null);
+        $amountRaw = self::field($item, ['discountAmount', 'amountOff', 'fixedDiscount', 'discountValue'], null);
+
+        $percentValue = self::toDecimal($percentRaw);
+        if ($percentValue !== null && $percentValue > 0) {
+            if ($percentValue <= 1) {
+                $percentValue *= 100;
             }
-            return 'PERCENT';
+            return ['type' => 'PERCENT', 'value' => round($percentValue, 2)];
         }
-        return null;
+
+        $amountValue = self::toDecimal($amountRaw);
+        if ($amountValue !== null && $amountValue > 0) {
+            return ['type' => 'AMOUNT', 'value' => round($amountValue, 2)];
+        }
+
+        $fallbackRaw = self::field($item, ['discount', 'discountText', 'value'], null);
+        $fallbackValue = self::toDecimal($fallbackRaw);
+        if ($fallbackValue !== null && $fallbackValue > 0) {
+            $fallbackText = (string) $fallbackRaw;
+            if (str_contains($fallbackText, '%')) {
+                return ['type' => 'PERCENT', 'value' => round($fallbackValue, 2)];
+            }
+            if (preg_match('/[€$£]|EUR|USD|GBP/i', $fallbackText)) {
+                return ['type' => 'AMOUNT', 'value' => round($fallbackValue, 2)];
+            }
+        }
+
+        return ['type' => 'NONE', 'value' => null];
     }
 
     /**
@@ -221,14 +213,12 @@ final class TradeDoublerImportService
                 $title = (string) self::field($item, ['title', 'name'], $programName);
                 $description = (string) self::field($item, ['description', 'shortDescription'], '');
                 $code = (string) self::field($item, ['code', 'voucherCode'], '');
-                $discountRaw = self::field($item, ['discount', 'discountAmount', 'value', 'discountValue', 'discountText', 'discountPercentage'], null);
-                $discount = self::formatDiscount($discountRaw);
-                $discountType = self::discountType($discountRaw, $item);
+                $discount = self::parseDiscount($item);
                 $url = (string) self::field($item, ['trackingUrl', 'clickUrl', 'deepLink', 'link', 'url'], '');
                 $startDate = self::toMysqlDate(self::field($item, ['startDate', 'validFrom', 'start']));
                 $endDate = self::toMysqlDate(self::field($item, ['endDate', 'validTo', 'end']));
                 $categoryName = (string) self::field($item, ['categoryName', 'category'], '');
-                $logoUrl = (string) self::field($item, ['logoUrl', 'programLogo', 'imageUrl', 'logo'], '');
+                $logoUrl = (string) self::field($item, ['logoUrl', 'advertiserLogoUrl', 'programLogo', 'imageUrl', 'logo'], '');
                 $storeDescription = (string) self::field($item, ['programDescription', 'description', 'shortDescription'], '');
 
                 if ($externalId === '' || $url === '') {
@@ -257,12 +247,13 @@ final class TradeDoublerImportService
 
                 $insertOffer = $this->db->prepare(
                     'INSERT INTO offers
-                        (store_id, category_id, title, slug, description, offer_type, coupon_code, affiliate_url, external_id, dedupe_hash, status, badge, discount_type, starts_at, expires_at, is_featured)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'ACTIVE\', ?, ?, ?, ?, ?)'
+                       (store_id, category_id, title, slug, description, offer_type, coupon_code, affiliate_url, external_id, dedupe_hash, status, badge, discount_type, discount_value, starts_at, expires_at, is_featured)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'ACTIVE\', ?, ?, ?, ?, ?, ?)'
                 );
+                $discountBadge = $discount['value'] !== null ? (string) $discount['value'] : null;
                 $insertOffer->execute([
-                    $storeId,
-                    $categoryId,
+                   $storeId,
+                   $categoryId,
                     $title,
                     $slug,
                     $description,
@@ -271,8 +262,9 @@ final class TradeDoublerImportService
                     $url,
                     $externalId,
                     $hash,
-                    $discount,
-                    $discountType,
+                    $discountBadge,
+                    $discount['type'],
+                    $discount['value'],
                     $startDate,
                     $endDate,
                     $markFeatured ? 1 : 0,

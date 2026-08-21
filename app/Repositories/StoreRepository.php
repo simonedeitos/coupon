@@ -25,7 +25,7 @@ final class StoreRepository
         try {
             $rows = $this->db->query(
                 'SELECT s.id, s.slug, s.name, s.description, s.website_url AS website,
-                        s.is_featured,
+                        s.is_featured, s.click_count,
                         COUNT(o.id) AS offers_count
                  FROM stores s
                  LEFT JOIN offers o ON o.store_id = s.id AND o.status = \'ACTIVE\'
@@ -42,6 +42,7 @@ final class StoreRepository
                 'description' => $r['description'] ?? '',
                 'website' => $r['website'] ?? '',
                 'offers_count' => (int) $r['offers_count'],
+                'click_count' => (int) ($r['click_count'] ?? 0),
                 'featured' => (bool) $r['is_featured'],
             ], $rows);
         } catch (\Throwable $e) {
@@ -72,12 +73,23 @@ final class StoreRepository
             $stmt = $this->db->prepare(
                 'SELECT s.id, s.slug, s.name, s.description, s.website_url AS website,
                         s.logo_path, s.click_count,
-                        COUNT(o.id) AS offers_count
+                        COALESCE(so.offers_count, 0) AS offers_count,
+                        COALESCE(sc.recent_clicks, 0) AS recent_clicks
                  FROM stores s
-                 LEFT JOIN offers o ON o.store_id = s.id AND o.status = \'ACTIVE\'
+                 LEFT JOIN (
+                    SELECT store_id, COUNT(*) AS offers_count
+                    FROM offers
+                    WHERE status = \'ACTIVE\'
+                    GROUP BY store_id
+                 ) so ON so.store_id = s.id
+                 LEFT JOIN (
+                    SELECT store_id, COUNT(*) AS recent_clicks
+                    FROM clicks
+                    WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                    GROUP BY store_id
+                 ) sc ON sc.store_id = s.id
                  WHERE s.is_active = 1 AND s.is_featured = 1
-                 GROUP BY s.id
-                 ORDER BY s.click_count DESC, offers_count DESC, s.name ASC
+                 ORDER BY recent_clicks DESC, s.click_count DESC, offers_count DESC, s.name ASC
                  LIMIT ?',
             );
             $stmt->execute([$limit]);
@@ -85,16 +97,26 @@ final class StoreRepository
             if (! empty($rows)) {
                 return array_map(static fn (array $r): array => self::mapStoreRow($r, true), $rows);
             }
-            // Fallback automatico: top per click_count aggregato
             $stmt = $this->db->prepare(
                 'SELECT s.id, s.slug, s.name, s.description, s.website_url AS website,
                         s.logo_path, s.click_count,
-                        COUNT(o.id) AS offers_count
+                        COALESCE(so.offers_count, 0) AS offers_count,
+                        COALESCE(sc.recent_clicks, 0) AS recent_clicks
                  FROM stores s
-                 LEFT JOIN offers o ON o.store_id = s.id AND o.status = \'ACTIVE\'
+                 LEFT JOIN (
+                    SELECT store_id, COUNT(*) AS offers_count
+                    FROM offers
+                    WHERE status = \'ACTIVE\'
+                    GROUP BY store_id
+                 ) so ON so.store_id = s.id
+                 LEFT JOIN (
+                    SELECT store_id, COUNT(*) AS recent_clicks
+                    FROM clicks
+                    WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                    GROUP BY store_id
+                 ) sc ON sc.store_id = s.id
                  WHERE s.is_active = 1
-                 GROUP BY s.id
-                 ORDER BY s.click_count DESC, offers_count DESC, s.name ASC
+                 ORDER BY recent_clicks DESC, s.click_count DESC, offers_count DESC, s.name ASC
                  LIMIT ?',
             );
             $stmt->execute([$limit]);

@@ -32,7 +32,7 @@
                             </button>
                         <?php else: ?>
                             <a class="btn" href="<?php echo e(url('/go/' . $offer['id'])); ?>"
-                                rel="nofollow sponsored noopener" target="_blank">
+                                rel="nofollow sponsored noopener noreferrer" target="_blank">
                                 Vai all'offerta
                             </a>
                         <?php endif; ?>

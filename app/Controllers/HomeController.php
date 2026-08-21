@@ -16,7 +16,7 @@ final class HomeController
         $storesById = array_column($storeRepo->all(), null, 'id');
         $offers = $offerRepo->featured();
         $latest = $offerRepo->latest();
-        $todayOffers = $offerRepo->topToday(10);
+        $todayOffers = $offerRepo->topClickedToday(10);
         $stats = [
             'total_offers' => $offerRepo->count(),
             'total_stores' => $storeRepo->count(),
