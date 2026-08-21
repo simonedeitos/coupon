@@ -30,8 +30,11 @@ foreach ($heroOffers as $offerItem) {
                 <button type="submit">Cerca</button>
             </form>
             <div class="category-filters category-filters-top">
-                <?php foreach (array_slice($categories, 0, 8) as $category): ?>
-                    <a class="pill" href="<?php echo e(url('/categoria/' . $category['slug'])); ?>"><?php echo e($category['icon']); ?> <?php echo e($category['name']); ?></a>
+                <?php foreach (array_slice($categories, 0, 10) as $category): ?>
+                    <a class="pill" href="<?php echo e(url('/categoria/' . $category['slug'])); ?>">
+                        <span class="category-pill-icon"><?php echo e($category['icon']); ?></span>
+                        <span><?php echo e($category['name']); ?></span>
+                    </a>
                 <?php endforeach; ?>
             </div>
             <div class="eyebrow">✦ Risparmia ad ogni acquisto</div>

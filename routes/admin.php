@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Controllers\Admin\AuthController;
 use App\Controllers\Admin\DashboardController;
 use App\Controllers\Admin\ManagementController;
+use App\Controllers\Admin\UserController;
 use App\Middleware\AuthMiddleware;
 use App\Middleware\CsrfMiddleware;
 use App\Middleware\RateLimitMiddleware;
@@ -44,6 +45,7 @@ return [
     ['method' => 'GET', 'pattern' => '/admin/settings', 'handler' => [ManagementController::class, 'index'], 'defaults' => ['section' => 'settings'], 'middleware' => [AuthMiddleware::class]],
     ['method' => 'POST', 'pattern' => '/admin/settings/save', 'handler' => [ManagementController::class, 'save'], 'defaults' => ['section' => 'settings'], 'middleware' => [AuthMiddleware::class, CsrfMiddleware::class]],
     ['method' => 'GET', 'pattern' => '/admin/users', 'handler' => [DashboardController::class, 'users'], 'middleware' => [AuthMiddleware::class]],
+    ['method' => 'POST', 'pattern' => '/admin/users/create', 'handler' => [UserController::class, 'store'], 'middleware' => [AuthMiddleware::class, CsrfMiddleware::class]],
     ['method' => 'GET', 'pattern' => '/admin/feature-flags', 'handler' => [ManagementController::class, 'index'], 'defaults' => ['section' => 'feature-flags'], 'middleware' => [AuthMiddleware::class]],
     ['method' => 'POST', 'pattern' => '/admin/feature-flags/save', 'handler' => [ManagementController::class, 'save'], 'defaults' => ['section' => 'feature-flags'], 'middleware' => [AuthMiddleware::class, CsrfMiddleware::class]],
     ['method' => 'GET', 'pattern' => '/admin/tradedoubler', 'handler' => [TradeDoublerController::class, 'search'], 'middleware' => [AuthMiddleware::class]],

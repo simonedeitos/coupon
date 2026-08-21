@@ -5,8 +5,23 @@
  */
 function td_field(array $item, array $keys, $default = '—') {
     foreach ($keys as $key) {
-        if (isset($item[$key]) && $item[$key] !== '' && $item[$key] !== null) {
+        if (array_key_exists($key, $item) && $item[$key] !== '' && $item[$key] !== null) {
             return $item[$key];
+        }
+
+        if (str_contains((string) $key, '.')) {
+            $cursor = $item;
+            $found = true;
+            foreach (explode('.', (string) $key) as $segment) {
+                if (!is_array($cursor) || !array_key_exists($segment, $cursor)) {
+                    $found = false;
+                    break;
+                }
+                $cursor = $cursor[$segment];
+            }
+            if ($found && $cursor !== '' && $cursor !== null) {
+                return $cursor;
+            }
         }
     }
     return $default;
@@ -36,13 +51,20 @@ function td_discount(array $item): string {
     if ($raw === null) {
         return '—';
     }
+    $title = (string) td_field($item, ['title', 'name'], '');
     if (is_numeric($raw)) {
         $num = (float) $raw;
         if ($num > 0 && $num <= 1) {
             $percent = round($num * 100, 2);
             return rtrim(rtrim((string) $percent, '0'), '.') . '%';
         }
-        return (string) $raw . '%';
+        if (str_contains((string) $raw, '%') || str_contains($title, '%')) {
+            return rtrim(rtrim((string) $num, '0'), '.') . '%';
+        }
+        if (preg_match('/€|EUR|euro/i', (string) $raw) || preg_match('/€|EUR|euro/i', $title)) {
+            return rtrim(rtrim((string) $num, '0'), '.') . '€';
+        }
+        return rtrim(rtrim((string) $num, '0'), '.');
     }
     return (string) $raw;
 }
@@ -136,7 +158,7 @@ function td_discount(array $item): string {
                                         <span class="badge" style="background:#eee;color:#555;padding:3px 10px;border-radius:999px;font-size:12px;white-space:nowrap;">Nuovo</span>
                                     <?php endif; ?>
                                 </td>
-                                <td><?php echo e((string) td_field($item, ['programName', 'program', 'advertiserName'])); ?></td>
+                                <td><?php echo e((string) td_field($item, ['programName', 'program', 'advertiserName', 'program.name', 'advertiser.name', 'merchant.name'])); ?></td>
                                 <td><?php echo e((string) td_field($item, ['title', 'name'])); ?></td>
                                 <?php if ($system === 'VOUCHERS'): ?>
                                     <td><?php echo e((string) td_field($item, ['code', 'voucherCode'])); ?></td>
@@ -144,11 +166,11 @@ function td_discount(array $item): string {
                                     <td><?php echo e(td_date($item, ['startDate', 'validFrom', 'start'])); ?></td>
                                     <td><?php echo e(td_date($item, ['endDate', 'validTo', 'end'])); ?></td>
                                     <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-                                        <?php echo e((string) td_field($item, ['trackingUrl', 'clickUrl', 'url', 'deepLink', 'link'])); ?>
+                                        <?php echo e((string) td_field($item, ['trackingUrl', 'clickUrl', 'url', 'deepLink', 'landingUrl', 'productUrl', 'link'])); ?>
                                     </td>
                                 <?php else: ?>
                                     <td><?php echo e((string) td_field($item, ['price'])); ?></td>
-                                    <td><?php echo e((string) td_field($item, ['categoryName', 'category'])); ?></td>
+                                    <td><?php echo e((string) td_field($item, ['categoryName', 'category', 'category.name', 'productCategoryName', 'programCategory'])); ?></td>
                                 <?php endif; ?>
                             </tr>
                             <?php endforeach; ?>

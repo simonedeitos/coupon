@@ -155,6 +155,39 @@ final class AuthService
         ], $this->users);
     }
 
+    public function create(array $data): bool
+    {
+        if ($this->pdo === null) {
+            return false;
+        }
+
+        $username = trim((string) ($data['username'] ?? ''));
+        $email = trim((string) ($data['email'] ?? ''));
+        $displayName = trim((string) ($data['display_name'] ?? ''));
+        $password = (string) ($data['password'] ?? '');
+        $role = strtoupper((string) ($data['role'] ?? 'EDITOR'));
+        $isActive = ! empty($data['is_active']) ? 1 : 0;
+
+        if ($username === '' || $email === '' || $password === '') {
+            return false;
+        }
+
+        $passwordHash = password_hash($password, PASSWORD_BCRYPT);
+        if (! is_string($passwordHash) || $passwordHash === '') {
+            return false;
+        }
+
+        try {
+            $stmt = $this->pdo->prepare(
+                'INSERT INTO users (username, email, display_name, role, password_hash, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())'
+            );
+            return $stmt->execute([$username, $email, $displayName, $role, $passwordHash, $isActive]);
+        } catch (\Throwable $e) {
+            error_log('AuthService::create failed: ' . $e->getMessage());
+            return false;
+        }
+    }
+
     private function findByUsername(string $username): ?array
     {
         $username = trim((string) $username);
