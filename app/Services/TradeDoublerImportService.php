@@ -46,18 +46,20 @@ final class TradeDoublerImportService
         $websiteId = $site['website_id'] ?? '';
 
         foreach ($items as &$item) {
-            if (! empty($item['trackingUrl'])) {
+            $existingTrackingUrl = (string) self::firstOf($item, ['trackingUrl', 'program.trackingUrl'], '');
+            if ($existingTrackingUrl !== '') {
+                $item['trackingUrl'] = $existingTrackingUrl;
                 continue;
             }
 
-            $programId = (string) self::field($item, ['programId'], '');
+            $programId = (string) self::firstOf($item, ['program.id', 'programId', 'advertiser.id', 'advertiserId'], '');
             if ($programId === '' || $websiteId === '') {
                 continue;
             }
 
             $trackingUrl = 'https://clk.tradedoubler.com/click?p=' . rawurlencode($programId) . '&a=' . rawurlencode((string) $websiteId);
 
-            $deeplink = (string) self::field($item, ['landingUrl', 'deepLink', 'productUrl', 'url'], '');
+            $deeplink = (string) self::firstOf($item, ['landingUrl', 'deepLink', 'productUrl', 'buyUrl', 'url', 'program.landingUrl'], '');
             if ($deeplink !== '') {
                 $trackingUrl .= '&url=' . rawurlencode($deeplink);
             }
@@ -81,7 +83,7 @@ final class TradeDoublerImportService
 
         $externalIds = [];
         foreach ($items as $item) {
-            $externalId = (string) self::field($item, ['voucherId', 'productId', 'id'], '');
+            $externalId = (string) self::firstOf($item, ['voucherId', 'productId', 'id'], '');
             if ($externalId !== '') {
                 $externalIds[] = $externalId;
             }
@@ -105,9 +107,9 @@ final class TradeDoublerImportService
         }
 
         foreach ($items as &$item) {
-            $externalId = (string) self::field($item, ['voucherId', 'productId', 'id'], '');
-            $code = (string) self::field($item, ['code', 'voucherCode'], '');
-            $title = (string) self::field($item, ['title', 'name'], '');
+            $externalId = (string) self::firstOf($item, ['voucherId', 'productId', 'id'], '');
+            $code = (string) self::firstOf($item, ['code', 'voucherCode', 'couponCode'], '');
+            $title = (string) self::firstOf($item, ['title', 'name', 'voucherTitle'], '');
             $hash = sha1($externalId . '|' . $code . '|' . $title);
 
             $item['_already_imported'] = isset($existingHashes[$externalId . '|' . $hash]);
@@ -149,6 +151,44 @@ final class TradeDoublerImportService
         return $cursor;
     }
 
+    private static function nestedField(array $item, string $dotKey, $default = null)
+    {
+        if (array_key_exists($dotKey, $item) && $item[$dotKey] !== '' && $item[$dotKey] !== null) {
+            return $item[$dotKey];
+        }
+
+        $parts = explode('.', $dotKey);
+        $current = $item;
+        foreach ($parts as $part) {
+            if (! is_array($current) || ! array_key_exists($part, $current)) {
+                return $default;
+            }
+            $current = $current[$part];
+        }
+
+        return ($current !== null && $current !== '') ? $current : $default;
+    }
+
+    private static function firstOf(array $item, array $dotKeys, $default = null)
+    {
+        foreach ($dotKeys as $key) {
+            $key = (string) $key;
+            $value = str_contains($key, '.')
+                ? self::nestedField($item, $key)
+                : self::field($item, [$key]);
+
+            if (is_array($value)) {
+                continue;
+            }
+
+            if ($value !== null && $value !== '') {
+                return $value;
+            }
+        }
+
+        return $default;
+    }
+
     private static function toMysqlDate($raw): ?string
     {
         if ($raw === null || $raw === '') {
@@ -177,9 +217,36 @@ final class TradeDoublerImportService
 
     private static function parseDiscount(array $item, string $title = ''): array
     {
-        $percentRaw = self::field($item, ['discountPercent', 'discountPercentage', 'percentOff', 'discountRate'], null);
-        $amountRaw = self::field($item, ['discountAmount', 'amountOff', 'fixedDiscount', 'discountValue'], null);
+        $discountObj = $item['discount'] ?? null;
+        if (is_array($discountObj)) {
+            $dtype = strtolower(trim((string) ($discountObj['type'] ?? '')));
+            $dvalue = isset($discountObj['value']) ? self::toDecimal($discountObj['value']) : null;
+            if ($dvalue !== null && $dvalue > 0) {
+                if (in_array($dtype, ['percentage', 'percent', 'pct', '%'], true)) {
+                    if ($dvalue <= 1) {
+                        $dvalue *= 100;
+                    }
+                    return ['type' => 'PERCENT', 'value' => round($dvalue, 2)];
+                }
+                if (in_array($dtype, ['amount', 'fixed', 'fixedamount', 'cash', 'currency', 'euro', 'eur'], true)) {
+                    return ['type' => 'AMOUNT', 'value' => round($dvalue, 2)];
+                }
+                if (str_contains($title, '%')) {
+                    return ['type' => 'PERCENT', 'value' => round($dvalue, 2)];
+                }
+                if (preg_match('/€|\bEUR\b|\beuro\b/i', $title)) {
+                    return ['type' => 'AMOUNT', 'value' => round($dvalue, 2)];
+                }
+                if ($dvalue <= 100) {
+                    return ['type' => 'PERCENT', 'value' => round($dvalue, 2)];
+                }
+                return ['type' => 'AMOUNT', 'value' => round($dvalue, 2)];
+            }
+        }
 
+        $percentRaw = self::firstOf($item, [
+            'discountPercent', 'discountPercentage', 'percentOff', 'discountRate', 'percent',
+        ]);
         $percentValue = self::toDecimal($percentRaw);
         if ($percentValue !== null && $percentValue > 0) {
             if ($percentValue <= 1) {
@@ -188,27 +255,49 @@ final class TradeDoublerImportService
             return ['type' => 'PERCENT', 'value' => round($percentValue, 2)];
         }
 
+        $amountRaw = self::firstOf($item, [
+            'discountAmount', 'amountOff', 'fixedDiscount', 'saving', 'savingAmount',
+        ]);
         $amountValue = self::toDecimal($amountRaw);
         if ($amountValue !== null && $amountValue > 0) {
             return ['type' => 'AMOUNT', 'value' => round($amountValue, 2)];
         }
 
-        $fallbackRaw = self::field($item, ['discount', 'discountText', 'value'], null);
-        $fallbackValue = self::toDecimal($fallbackRaw);
-        if ($fallbackValue !== null && $fallbackValue > 0) {
-            $fallbackText = (string) $fallbackRaw;
-            if (str_contains($fallbackText, '%')) {
-                return ['type' => 'PERCENT', 'value' => round($fallbackValue, 2)];
-            }
-            if (preg_match('/€|EUR|euro/i', $fallbackText)) {
-                return ['type' => 'AMOUNT', 'value' => round($fallbackValue, 2)];
+        $fallbackDiscount = $item['discount'] ?? null;
+        $fallbackCandidates = [
+            is_string($fallbackDiscount) || is_numeric($fallbackDiscount) ? $fallbackDiscount : null,
+            self::field($item, ['discountText', 'savingText', 'offerText', 'value']),
+        ];
+
+        $anyValue = null;
+        foreach ($fallbackCandidates as $rawCandidate) {
+            if ($rawCandidate === null) {
+                continue;
             }
 
-            if (str_contains($title, '%')) {
-                return ['type' => 'PERCENT', 'value' => round($fallbackValue, 2)];
+            $text = (string) $rawCandidate;
+            $numeric = self::toDecimal($rawCandidate);
+            if ($numeric === null || $numeric <= 0) {
+                continue;
             }
-            if (preg_match('/€|EUR|euro/i', $title)) {
-                return ['type' => 'AMOUNT', 'value' => round($fallbackValue, 2)];
+            if ($anyValue === null) {
+                $anyValue = $numeric;
+            }
+
+            if (str_contains($text, '%')) {
+                return ['type' => 'PERCENT', 'value' => round($numeric, 2)];
+            }
+            if (preg_match('/€|\bEUR\b|\beuro\b/i', $text)) {
+                return ['type' => 'AMOUNT', 'value' => round($numeric, 2)];
+            }
+        }
+
+        if ($anyValue !== null && $anyValue > 0) {
+            if (str_contains($title, '%')) {
+                return ['type' => 'PERCENT', 'value' => round($anyValue, 2)];
+            }
+            if (preg_match('/€|\bEUR\b|\beuro\b/i', $title)) {
+                return ['type' => 'AMOUNT', 'value' => round($anyValue, 2)];
             }
         }
 
@@ -236,19 +325,41 @@ final class TradeDoublerImportService
 
         foreach ($items as $item) {
             try {
-                $externalId = (string) self::field($item, ['voucherId', 'productId', 'id'], '');
-                $programId = (string) self::field($item, ['programId', 'program.id', 'advertiser.id', 'merchant.id'], '');
-                $programName = (string) self::field($item, ['programName', 'program', 'advertiserName', 'program.name', 'advertiser.name', 'merchant.name'], 'Store senza nome');
-                $title = (string) self::field($item, ['title', 'name'], $programName);
-                $description = (string) self::field($item, ['description', 'shortDescription'], '');
-                $code = (string) self::field($item, ['code', 'voucherCode'], '');
+                $externalId = (string) self::firstOf($item, ['voucherId', 'productId', 'id'], '');
+                $programId = (string) self::firstOf($item, [
+                    'program.id', 'programId', 'advertiser.id', 'advertiserId', 'merchant.id',
+                ], '');
+                $programName = (string) self::firstOf($item, [
+                    'program.name', 'programName', 'advertiser.name', 'advertiserName',
+                    'merchant.name', 'program', 'advertiser',
+                ], 'Store senza nome');
+                $title = (string) self::firstOf($item, ['title', 'name', 'voucherTitle'], $programName);
+                $description = (string) self::firstOf($item, [
+                    'description', 'shortDescription', 'voucherDescription', 'offerDescription',
+                ], '');
+                $code = (string) self::firstOf($item, ['code', 'voucherCode', 'couponCode'], '');
                 $discount = self::parseDiscount($item, $title);
-                $url = (string) self::field($item, ['trackingUrl', 'clickUrl', 'deepLink', 'landingUrl', 'productUrl', 'link', 'url'], '');
-                $startDate = self::toMysqlDate(self::field($item, ['startDate', 'validFrom', 'start']));
-                $endDate = self::toMysqlDate(self::field($item, ['endDate', 'validTo', 'end']));
-                $categoryName = (string) self::field($item, ['categoryName', 'category', 'category.name', 'productCategoryName', 'programCategory'], '');
-                $logoUrl = (string) self::field($item, ['logoUrl', 'advertiserLogoUrl', 'programLogo', 'imageUrl', 'logo', 'image.url', 'advertiser.logoUrl', 'program.logoUrl'], '');
-                $storeDescription = (string) self::field($item, ['programDescription', 'advertiserDescription', 'program.description', 'advertiser.description', 'description', 'shortDescription'], '');
+                $url = (string) self::firstOf($item, [
+                    'trackingUrl', 'program.trackingUrl', 'clickUrl', 'buyUrl', 'deepLink', 'link', 'url',
+                ], '');
+                $startDate = self::toMysqlDate(self::firstOf($item, ['startDate', 'validFrom', 'start', 'startdate']));
+                $endDate = self::toMysqlDate(self::firstOf($item, ['endDate', 'validTo', 'end', 'expiryDate', 'enddate']));
+                $logoUrl = (string) self::firstOf($item, [
+                    'program.logoUrl', 'program.logo', 'program.imageUrl', 'program.image',
+                    'advertiser.logoUrl', 'advertiser.logo',
+                    'logoUrl', 'advertiserLogoUrl', 'programLogo', 'imageUrl', 'logo',
+                ], '');
+                $storeDescription = (string) self::firstOf($item, [
+                    'program.description', 'program.shortDescription', 'program.summary',
+                    'advertiser.description', 'advertiser.shortDescription',
+                    'programDescription', 'advertiserDescription',
+                ], '');
+                $categoryName = (string) self::firstOf($item, [
+                    'program.categoryName', 'program.category',
+                    'advertiser.categoryName', 'advertiser.category',
+                    'category.name', 'categoryName', 'category',
+                    'productCategoryName', 'programCategory',
+                ], '');
 
                 if ($externalId === '' || $url === '') {
                     $errors++;
@@ -279,10 +390,12 @@ final class TradeDoublerImportService
                        (store_id, category_id, title, slug, description, offer_type, coupon_code, affiliate_url, external_id, dedupe_hash, status, badge, discount_type, discount_value, starts_at, expires_at, is_featured)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'ACTIVE\', ?, ?, ?, ?, ?, ?)'
                 );
-                $discountBadge = $discount['value'] !== null ? (string) $discount['value'] : null;
+                $badgeValue = ($discount['value'] !== null)
+                    ? rtrim(rtrim(number_format((float) $discount['value'], 2, '.', ''), '0'), '.')
+                    : null;
                 $insertOffer->execute([
-                   $storeId,
-                   $categoryId,
+                    $storeId,
+                    $categoryId,
                     $title,
                     $slug,
                     $description,
@@ -291,7 +404,7 @@ final class TradeDoublerImportService
                     $url,
                     $externalId,
                     $hash,
-                    $discountBadge,
+                    $badgeValue,
                     $discount['type'],
                     $discount['value'],
                     $startDate,

@@ -47,25 +47,53 @@ function td_date(array $item, array $keys): string {
  * TradeDoubler restituisce spesso il valore come frazione decimale (0.1 = 10%).
  */
 function td_discount(array $item): string {
-    $raw = td_field($item, ['discount', 'discountAmount', 'value', 'discountValue', 'discountText'], null);
+    $discountObj = $item['discount'] ?? null;
+    if (is_array($discountObj)) {
+        $dtype  = strtolower(trim((string) ($discountObj['type'] ?? '')));
+        $dvalue = isset($discountObj['value']) && is_numeric($discountObj['value'])
+            ? (float) $discountObj['value']
+            : null;
+        if ($dvalue !== null && $dvalue > 0) {
+            if (in_array($dtype, ['percentage', 'percent', 'pct', '%'], true)) {
+                if ($dvalue <= 1) {
+                    $dvalue *= 100;
+                }
+                $fmt = rtrim(rtrim(number_format($dvalue, 2, '.', ''), '0'), '.');
+                return $fmt . '%';
+            }
+            if (in_array($dtype, ['amount', 'fixed', 'fixedamount', 'cash', 'currency', 'eur', 'euro'], true)) {
+                $fmt = rtrim(rtrim(number_format($dvalue, 2, '.', ''), '0'), '.');
+                return $fmt . '€';
+            }
+        }
+    }
+
+    $flatDiscount = isset($item['discount']) && !is_array($item['discount']) ? $item['discount'] : null;
+    $raw = $flatDiscount ?? td_field($item, ['discountPercent', 'discountAmount', 'discountText', 'savingText', 'value'], null);
+    $title = (string) td_field($item, ['title', 'name'], '');
+
     if ($raw === null) {
         return '—';
     }
-    $title = (string) td_field($item, ['title', 'name'], '');
+
     if (is_numeric($raw)) {
         $num = (float) $raw;
+        if ($num <= 0) {
+            return '—';
+        }
         if ($num > 0 && $num <= 1) {
-            $percent = round($num * 100, 2);
-            return rtrim(rtrim((string) $percent, '0'), '.') . '%';
+            $fmt = rtrim(rtrim(number_format($num * 100, 2, '.', ''), '0'), '.');
+            return $fmt . '%';
         }
-        if (str_contains((string) $raw, '%') || str_contains($title, '%')) {
-            return rtrim(rtrim((string) $num, '0'), '.') . '%';
+        if (str_contains($title, '%')) {
+            return rtrim(rtrim(number_format($num, 2, '.', ''), '0'), '.') . '%';
         }
-        if (preg_match('/€|EUR|euro/i', (string) $raw) || preg_match('/€|EUR|euro/i', $title)) {
-            return rtrim(rtrim((string) $num, '0'), '.') . '€';
+        if (preg_match('/€|\bEUR\b|\beuro\b/i', $title)) {
+            return rtrim(rtrim(number_format($num, 2, '.', ''), '0'), '.') . '€';
         }
-        return rtrim(rtrim((string) $num, '0'), '.');
+        return rtrim(rtrim(number_format($num, 2, '.', ''), '0'), '.');
     }
+
     return (string) $raw;
 }
 ?>
@@ -158,7 +186,24 @@ function td_discount(array $item): string {
                                         <span class="badge" style="background:#eee;color:#555;padding:3px 10px;border-radius:999px;font-size:12px;white-space:nowrap;">Nuovo</span>
                                     <?php endif; ?>
                                 </td>
-                                <td><?php echo e((string) td_field($item, ['programName', 'program', 'advertiserName', 'program.name', 'advertiser.name', 'merchant.name'])); ?></td>
+                                <td>
+                                    <?php
+                                    $pName = (is_array($item['program'] ?? null))
+                                        ? ($item['program']['name'] ?? '')
+                                        : '';
+                                    if ($pName === '') {
+                                        $pName = (string) td_field($item, ['programName', 'advertiserName', 'merchantName']);
+                                    }
+                                    echo e($pName);
+
+                                    $logoUrl = (is_array($item['program'] ?? null))
+                                        ? ($item['program']['logoUrl'] ?? $item['program']['logo'] ?? '')
+                                        : (string) td_field($item, ['logoUrl', 'advertiserLogoUrl'], '');
+                                    if ($logoUrl !== '') {
+                                        echo '<br><img src="' . e($logoUrl) . '" style="max-height:24px;max-width:80px;object-fit:contain;vertical-align:middle;" alt="">';
+                                    }
+                                    ?>
+                                </td>
                                 <td><?php echo e((string) td_field($item, ['title', 'name'])); ?></td>
                                 <?php if ($system === 'VOUCHERS'): ?>
                                     <td><?php echo e((string) td_field($item, ['code', 'voucherCode'])); ?></td>
@@ -170,7 +215,19 @@ function td_discount(array $item): string {
                                     </td>
                                 <?php else: ?>
                                     <td><?php echo e((string) td_field($item, ['price'])); ?></td>
-                                    <td><?php echo e((string) td_field($item, ['categoryName', 'category', 'category.name', 'productCategoryName', 'programCategory'])); ?></td>
+                                    <td>
+                                        <?php
+                                        $catName = (is_array($item['category'] ?? null))
+                                            ? ($item['category']['name'] ?? '')
+                                            : '';
+                                        if ($catName === '') {
+                                            $catName = (is_array($item['program'] ?? null))
+                                                ? ($item['program']['categoryName'] ?? '')
+                                                : (string) td_field($item, ['categoryName', 'category'], '—');
+                                        }
+                                        echo e($catName ?: '—');
+                                        ?>
+                                    </td>
                                 <?php endif; ?>
                             </tr>
                             <?php endforeach; ?>

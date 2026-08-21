@@ -112,7 +112,21 @@ final class TradeDoublerClient
             return ['vouchers' => [], 'error' => 'Risposta TradeDoubler non valida (JSON non decodificabile).'];
         }
 
-        $items = $data[$responseKey] ?? $data[rtrim($responseKey, 's')] ?? (array_is_list($data) ? $data : []);
+        $items = $data[$responseKey]
+            ?? ($data['data'][$responseKey] ?? null)
+            ?? ($data['response'][$responseKey] ?? null)
+            ?? ($data['result'][$responseKey] ?? null)
+            ?? ($data[rtrim($responseKey, 's')] ?? null)
+            ?? (array_is_list($data) ? $data : []);
+
+        if (empty($items)) {
+            $safeResponseKey = preg_replace('/[^a-z0-9_-]/i', '_', $responseKey) ?? 'items';
+            $wrappers = [];
+            foreach (['data', 'response', 'result'] as $wrapperKey) {
+                $wrappers[] = $wrapperKey . ':' . ((isset($data[$wrapperKey]) && is_array($data[$wrapperKey])) ? 'array' : 'missing');
+            }
+            error_log('[TradeDoubler] Empty ' . $safeResponseKey . ' payload. root=' . (array_is_list($data) ? 'list' : 'assoc') . '; wrappers=' . implode(', ', $wrappers));
+        }
 
         return ['vouchers' => array_values($items), 'error' => null];
     }
