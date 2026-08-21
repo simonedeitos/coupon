@@ -3,14 +3,34 @@
 <div class="latest-list">
     <?php foreach ($offers as $offer): ?>
         <?php $store = $storeIndex[(int) $offer['store_id']] ?? null; ?>
-        <a class="latest-item" href="<?php echo e(url('/coupon/' . $offer['slug'])); ?>">
+        <?php $discountLabel = \App\Helpers\OfferHelper::formatDiscount($offer); ?>
+        <?php $isAffiliateOnly = empty($offer['code']) && $discountLabel === ''; ?>
+        <div class="latest-item">
             <div class="mini-logo"><?php echo e($store['initial'] ?? '?'); ?></div>
             <div class="latest-info">
-                <strong><?php echo e($offer['title']); ?></strong><br>
-                <small><?php echo e($store['name'] ?? 'Store'); ?> · <?php echo e(\App\Helpers\OfferHelper::getOfferTypeLabel((string) $offer['type'])); ?></small>
+                <strong>
+                    <a href="<?php echo e(url('/coupon/' . $offer['slug'])); ?>"><?php echo e(($store['name'] ?? 'Store') . ' | ' . $offer['title']); ?></a>
+                </strong>
+                <small><?php echo e(\App\Helpers\OfferHelper::getOfferTypeLabel((string) $offer['type'])); ?></small>
             </div>
-            <div class="latest-discount"><?php echo e(\App\Helpers\OfferHelper::formatDiscount($offer)); ?></div>
-        </a>
+            <div class="latest-actions">
+                <?php if ($discountLabel !== ''): ?>
+                    <span class="badge-discount"><?php echo e($discountLabel); ?></span>
+                <?php endif; ?>
+                <?php if ($isAffiliateOnly): ?>
+                    <button class="btn-small" type="button"
+                        onclick="window.open('<?php echo e(url('/go/' . $offer['id'])); ?>','_blank','noopener')">
+                        Vai al sito
+                    </button>
+                <?php elseif (! empty($offer['code'])): ?>
+                    <button class="btn-small" type="button"
+                        data-offer-code="<?php echo e($offer['code']); ?>"
+                        data-offer-track="<?php echo e(url('/go/' . $offer['id'])); ?>">
+                        Mostra codice
+                    </button>
+                <?php endif; ?>
+            </div>
+        </div>
     <?php endforeach; ?>
 </div>
 <?php else: ?>

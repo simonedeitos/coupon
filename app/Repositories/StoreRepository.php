@@ -71,30 +71,55 @@ final class StoreRepository
         try {
             $stmt = $this->db->prepare(
                 'SELECT s.id, s.slug, s.name, s.description, s.website_url AS website,
+                        s.logo_path, s.click_count,
                         COUNT(o.id) AS offers_count
                  FROM stores s
                  LEFT JOIN offers o ON o.store_id = s.id AND o.status = \'ACTIVE\'
                  WHERE s.is_active = 1 AND s.is_featured = 1
                  GROUP BY s.id
-                 ORDER BY offers_count DESC, s.name ASC
+                 ORDER BY s.click_count DESC, offers_count DESC, s.name ASC
                  LIMIT ?',
             );
             $stmt->execute([$limit]);
             $rows = $stmt->fetchAll();
-            return array_map(static fn (array $r): array => [
-                'id' => (int) $r['id'],
-                'slug' => $r['slug'],
-                'name' => $r['name'],
-                'initial' => strtoupper(mb_substr($r['name'], 0, 1)),
-                'description' => $r['description'] ?? '',
-                'website' => $r['website'] ?? '',
-                'offers_count' => (int) $r['offers_count'],
-                'featured' => true,
-            ], $rows);
+            if (! empty($rows)) {
+                return array_map(static fn (array $r): array => self::mapStoreRow($r, true), $rows);
+            }
+            // Fallback automatico: top per click_count aggregato
+            $stmt = $this->db->prepare(
+                'SELECT s.id, s.slug, s.name, s.description, s.website_url AS website,
+                        s.logo_path, s.click_count,
+                        COUNT(o.id) AS offers_count
+                 FROM stores s
+                 LEFT JOIN offers o ON o.store_id = s.id AND o.status = \'ACTIVE\'
+                 WHERE s.is_active = 1
+                 GROUP BY s.id
+                 ORDER BY s.click_count DESC, offers_count DESC, s.name ASC
+                 LIMIT ?',
+            );
+            $stmt->execute([$limit]);
+            $rows = $stmt->fetchAll();
+            return array_map(static fn (array $r): array => self::mapStoreRow($r, false), $rows);
         } catch (\Throwable $e) {
             error_log('StoreRepository::featured failed: ' . $e->getMessage());
             return [];
         }
+    }
+
+    private static function mapStoreRow(array $r, bool $featured): array
+    {
+        return [
+            'id' => (int) $r['id'],
+            'slug' => $r['slug'],
+            'name' => $r['name'],
+            'initial' => strtoupper(mb_substr($r['name'], 0, 1)),
+            'description' => $r['description'] ?? '',
+            'website' => $r['website'] ?? '',
+            'logo_path' => $r['logo_path'] ?? '',
+            'click_count' => (int) ($r['click_count'] ?? 0),
+            'offers_count' => (int) ($r['offers_count'] ?? 0),
+            'featured' => $featured,
+        ];
     }
 
     public function findBySlug(string $slug): ?array

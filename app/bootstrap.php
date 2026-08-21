@@ -53,7 +53,7 @@ if (! isset($GLOBALS['couponami'])) {
     $csrf = new CsrfService();
     $db = Connection::get($config['database']);
     $auth = new AuthService($config['app']['admin_users'], $cache, $db);
-    $analytics = new AnalyticsService($cache);
+    $analytics = new AnalyticsService($cache, $db);
     $seo = new SeoService($config['seo'], $config['app']);
     $schema = new SchemaService($config['app'], $config['seo']);
     $categories = new CategoryRepository($cache, $db);
@@ -82,11 +82,12 @@ if (! isset($GLOBALS['couponami'])) {
         'schema' => $schema,
         'sitemap' => $sitemap,
         'view' => $view,
+        'db' => $db,
         'categoryRepository' => $categories,
         'storeRepository' => $stores,
         'offerRepository' => $offers,
         'settingsRepository' => $settings,
-        'analyticsRepository' => new AnalyticsRepository($analytics, $offers, $stores, $cache),
+        'analyticsRepository' => new AnalyticsRepository($analytics, $offers, $stores, $cache, $db),
         'tradeDoublerClient' => $tradeDoublerClient,
         'tradeDoublerImport' => $tradeDoublerImport,
     ];

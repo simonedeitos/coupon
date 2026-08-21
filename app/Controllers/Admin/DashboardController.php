@@ -45,16 +45,48 @@ final class DashboardController
 
     public function audit(): array
     {
-        $items = app('cache')->readJsonLines('logs', 'audit.log', 100);
+        $items = [];
+        $db = app('db');
+        if ($db !== null) {
+            try {
+                $stmt = $db->prepare(
+                    "SELECT al.action, al.entity_type, al.entity_id, al.ip_address, al.payload, al.created_at,
+                            u.username AS actor
+                     FROM audit_logs al
+                     LEFT JOIN users u ON u.id = al.user_id
+                     ORDER BY al.created_at DESC
+                     LIMIT 100"
+                );
+                $stmt->execute();
+                foreach ($stmt->fetchAll() as $row) {
+                    $payload = [];
+                    if ($row['payload'] !== null) {
+                        $payload = json_decode($row['payload'], true) ?? [];
+                    }
+                    $items[] = [
+                        'action' => $row['action'],
+                        'actor' => $row['actor'] ?? 'sistema',
+                        'target' => trim(($row['entity_type'] ?? '') . ':' . ($row['entity_id'] ?? ''), ':'),
+                        'created_at' => $row['created_at'],
+                        'payload' => $payload,
+                    ];
+                }
+            } catch (\Throwable $e) {
+                error_log('DashboardController::audit DB failed: ' . $e->getMessage());
+            }
+        }
+        if (empty($items)) {
+            $items = app('cache')->readJsonLines('logs', 'audit.log', 100);
+        }
         $meta = app('seo')->meta(['title' => 'Audit log', 'path' => '/admin/audit']);
         return response_view('admin/audit/index', compact('items', 'meta'), 'admin');
     }
 
     public function users(): array
     {
-        $items = app('auth')->all();
+        $users = app('auth')->all();
         $meta = app('seo')->meta(['title' => 'Utenti admin', 'path' => '/admin/users']);
-        return response_view('admin/users/index', compact('items', 'meta'), 'admin');
+        return response_view('admin/users/index', compact('users', 'meta'), 'admin');
     }
 
     public function seo(): array
