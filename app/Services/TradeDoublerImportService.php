@@ -472,17 +472,22 @@ final class TradeDoublerImportService
         }
 
         if ($title !== '') {
-            $clean = preg_replace('/[^0-9.,\-]/', '', $title);
-            $clean = str_replace(',', '.', $clean ?? '');
-            if (is_numeric($clean)) {
-                $num = (float) $clean;
+            if (preg_match('/([0-9]+(?:[.,][0-9]+)?)\s*%/u', $title, $matches) === 1) {
+                $num = (float) str_replace(',', '.', $matches[1]);
                 if ($num > 0) {
-                    if (str_contains($title, '%')) {
-                        return ['type' => 'PERCENT', 'value' => round($num, 2)];
-                    }
-                    if (preg_match('/€|\bEUR\b|\beuro\b/i', $title)) {
-                        return ['type' => 'AMOUNT', 'value' => round($num, 2)];
-                    }
+                    return ['type' => 'PERCENT', 'value' => round($num, 2)];
+                }
+            }
+            if (preg_match('/([0-9]+(?:[.,][0-9]+)?)\s*(€|\bEUR\b|\beuro\b)/iu', $title, $matches) === 1) {
+                $num = (float) str_replace(',', '.', $matches[1]);
+                if ($num > 0) {
+                    return ['type' => 'AMOUNT', 'value' => round($num, 2)];
+                }
+            }
+            if (preg_match('/(€|\bEUR\b|\beuro\b)\s*([0-9]+(?:[.,][0-9]+)?)/iu', $title, $matches) === 1) {
+                $num = (float) str_replace(',', '.', $matches[2]);
+                if ($num > 0) {
+                    return ['type' => 'AMOUNT', 'value' => round($num, 2)];
                 }
             }
         }
