@@ -23,6 +23,7 @@ final class AnalyticsRepository
     {
         $series = $this->analytics->clickSeries();
         $clicks30d = array_sum(array_column($series, 'clicks'));
+        $totalOffers = $this->offers->count();
 
         $topOffers = [];
         $topStores = [];
@@ -98,12 +99,12 @@ final class AnalyticsRepository
 
         return [
             'kpis' => [
-                'offers' => $this->offers->count(),
+                'offers' => $totalOffers,
                 'stores' => $this->stores->count(),
                 'clicks_30d' => $clicks30d,
                 'total_clicks' => $totalClicks,
                 'total_page_views' => $totalPageViews,
-                'conversion_rate' => $this->offers->count() > 0 ? round(($clicks30d / max($this->offers->count(), 1)) * 100, 1) . '%' : '0%',
+                'conversion_rate' => $totalOffers > 0 ? round(($clicks30d / max($totalOffers, 1)) * 100, 1) . '%' : '0%',
             ],
             'series' => $series,
             'top_offers' => $topOffers,

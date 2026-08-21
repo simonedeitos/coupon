@@ -22,7 +22,7 @@ SET @idx_offers = (
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'offers' AND INDEX_NAME = 'idx_offers_click_count'
 );
 SET @sql = IF(@idx_offers = 0,
-    'ALTER TABLE offers ADD INDEX idx_offers_click_count (click_count DESC)',
+    'ALTER TABLE offers ADD INDEX idx_offers_click_count (click_count)',
     'SELECT 2 -- indice già presente');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
@@ -41,7 +41,7 @@ SET @idx_stores = (
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'stores' AND INDEX_NAME = 'idx_stores_click_count'
 );
 SET @sql = IF(@idx_stores = 0,
-    'ALTER TABLE stores ADD INDEX idx_stores_click_count (click_count DESC)',
+    'ALTER TABLE stores ADD INDEX idx_stores_click_count (click_count)',
     'SELECT 4 -- indice già presente');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
