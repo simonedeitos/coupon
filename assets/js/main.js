@@ -1,4 +1,21 @@
 (() => {
+  const normalizeTrackUrl = (value) => {
+    if (!value || typeof value !== 'string') {
+      return '';
+    }
+    if (value.startsWith('/go/')) {
+      return value;
+    }
+    try {
+      const parsed = new URL(value, window.location.origin);
+      return parsed.origin === window.location.origin && parsed.pathname.startsWith('/go/')
+        ? parsed.toString()
+        : '';
+    } catch (_) {
+      return '';
+    }
+  };
+
   const modal = document.querySelector('[data-coupon-modal]');
   const codeTarget = modal?.querySelector('[data-coupon-code]');
   if (modal && codeTarget) {
@@ -8,8 +25,9 @@
     };
 
     const openModal = (code, trackUrl) => {
-      if (trackUrl) {
-        window.open(trackUrl, '_blank', 'noopener,noreferrer');
+      const safeTrackUrl = normalizeTrackUrl(trackUrl);
+      if (safeTrackUrl) {
+        window.open(safeTrackUrl, '_blank', 'noopener,noreferrer');
       }
 
       codeTarget.textContent = code;
@@ -25,7 +43,7 @@
       const trigger = event.target.closest('[data-offer-code]');
       if (trigger) {
         const code = trigger.getAttribute('data-offer-code') || '';
-        const trackUrl = trigger.getAttribute('data-offer-track') || '';
+        const trackUrl = normalizeTrackUrl(trigger.getAttribute('data-offer-track') || '');
         openModal(code, trackUrl);
         return;
       }
@@ -60,6 +78,19 @@
       const codeButton = heroRotator.querySelector('[data-hero-code-button]');
       const directLink = heroRotator.querySelector('[data-hero-direct-link]');
       let index = 0;
+      let currentDirectUrl = '';
+
+      if (directLink) {
+        directLink.setAttribute('href', '#');
+        directLink.addEventListener('click', (event) => {
+          if (!currentDirectUrl) {
+            event.preventDefault();
+            return;
+          }
+          event.preventDefault();
+          window.open(currentDirectUrl, '_blank', 'noopener,noreferrer');
+        });
+      }
 
       const render = (next) => {
         const offer = offers[next];
@@ -83,11 +114,12 @@
           if (offer.code) {
             codeButton.hidden = false;
             codeButton.setAttribute('data-offer-code', offer.code);
-            codeButton.setAttribute('data-offer-track', offer.track_url || '');
+            codeButton.setAttribute('data-offer-track', normalizeTrackUrl(offer.track_url || ''));
             directLink.hidden = true;
+            currentDirectUrl = '';
           } else {
             directLink.hidden = false;
-            directLink.setAttribute('href', offer.track_url || '#');
+            currentDirectUrl = normalizeTrackUrl(offer.track_url || '');
             codeButton.hidden = true;
             codeButton.removeAttribute('data-offer-code');
             codeButton.removeAttribute('data-offer-track');
