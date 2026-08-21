@@ -167,8 +167,12 @@ final class AuthService
         $password = (string) ($data['password'] ?? '');
         $role = strtoupper((string) ($data['role'] ?? 'EDITOR'));
         $isActive = ! empty($data['is_active']) ? 1 : 0;
+        $allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'EDITOR', 'ANALYTICS'];
 
         if ($username === '' || $email === '' || $password === '') {
+            return false;
+        }
+        if (! in_array($role, $allowedRoles, true)) {
             return false;
         }
 

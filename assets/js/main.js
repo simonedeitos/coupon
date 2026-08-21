@@ -65,6 +65,8 @@
 
       if (modal && codeTarget) {
         codeTarget.textContent = code;
+        modal.hidden = false;
+        document.body.classList.add('modal-open');
       }
 
       if (navigator.clipboard?.writeText && code) {

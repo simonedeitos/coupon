@@ -14,7 +14,7 @@ final class UserController
             'display_name' => trim((string) request_input('display_name', '')),
             'password' => (string) request_input('password', ''),
             'role' => strtoupper((string) request_input('role', 'EDITOR')),
-            'is_active' => ! empty($_POST['is_active']) ? 1 : 0,
+            'is_active' => request_input('is_active', '') ? 1 : 0,
         ];
 
         if ($data['username'] === '' || $data['email'] === '' || $data['password'] === '') {
@@ -26,7 +26,7 @@ final class UserController
         if ($ok) {
             flash('success', 'Utente creato con successo.');
         } else {
-            flash('error', 'Errore nella creazione dell\'utente. Username o email già in uso.');
+            flash('error', 'Errore nella creazione dell\'utente. Verifica i dati inseriti (username/email potrebbero essere già in uso).');
         }
 
         return redirect('/admin/users');
