@@ -44,7 +44,8 @@ final class ManagementController
             $item = app('settingsRepository')->saveSection('feature_flags', array_map(static fn ($value): bool => (bool) $value, $payload));
         }
         $entityId = isset($item['id']) ? (int) $item['id'] : null;
-        $this->writeAudit('save:' . $section, $section, $entityId, ['payload_keys' => array_keys($payload)]);
+        $auditAction = ! empty($payload['id']) ? 'update:' . $section : 'create:' . $section;
+        $this->writeAudit($auditAction, $section, $entityId, ['payload_keys' => array_keys($payload)]);
         flash('success', ucfirst($section) . ' aggiornato.');
         return redirect('/admin/' . $section);
     }

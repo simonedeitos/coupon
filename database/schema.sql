@@ -1,65 +1,426 @@
-CREATE TABLE IF NOT EXISTS `users` (
-  `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  `username` VARCHAR(100) NOT NULL UNIQUE,
-  `password_hash` VARCHAR(255) NOT NULL,
-  `email` VARCHAR(190) NOT NULL UNIQUE,
-  `display_name` VARCHAR(190) NOT NULL,
-  `role` ENUM('SUPER_ADMIN','ADMIN','EDITOR','ANALYTICS') NOT NULL DEFAULT 'EDITOR',
-  `is_active` TINYINT(1) NOT NULL DEFAULT 1,
-  `last_login_at` DATETIME NULL,
-  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+SET FOREIGN_KEY_CHECKS=0;
+
+DROP TABLE IF EXISTS offer_tags;
+DROP TABLE IF EXISTS import_queue_items;
+DROP TABLE IF EXISTS import_queue;
+DROP TABLE IF EXISTS offer_ratings;
+DROP TABLE IF EXISTS search_index;
+DROP TABLE IF EXISTS cache_entries;
+DROP TABLE IF EXISTS import_logs;
+DROP TABLE IF EXISTS cron_logs;
+DROP TABLE IF EXISTS system_config;
+DROP TABLE IF EXISTS audit_logs;
+DROP TABLE IF EXISTS verification_status;
+DROP TABLE IF EXISTS sitemap_cache;
+DROP TABLE IF EXISTS seo_metadata;
+DROP TABLE IF EXISTS newsletter_logs;
+DROP TABLE IF EXISTS newsletter_subscribers;
+DROP TABLE IF EXISTS click_analytics_daily;
+DROP TABLE IF EXISTS clicks;
+DROP TABLE IF EXISTS page_views;
+DROP TABLE IF EXISTS affiliate_mappings;
+DROP TABLE IF EXISTS affiliate_programs;
+DROP TABLE IF EXISTS affiliate_networks;
+DROP TABLE IF EXISTS offer_status_log;
+DROP TABLE IF EXISTS offers;
+DROP TABLE IF EXISTS stores;
+DROP TABLE IF EXISTS categories;
+DROP TABLE IF EXISTS tags;
+DROP TABLE IF EXISTS settings;
+DROP TABLE IF EXISTS feature_flags;
+DROP TABLE IF EXISTS api_keys;
+DROP TABLE IF EXISTS seo_title_cache;
+
+SET FOREIGN_KEY_CHECKS=1;
+
+CREATE TABLE IF NOT EXISTS users (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  username VARCHAR(100) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  email VARCHAR(190) NOT NULL UNIQUE,
+  display_name VARCHAR(190) NOT NULL,
+  role ENUM('SUPER_ADMIN','ADMIN','EDITOR','ANALYTICS') NOT NULL DEFAULT 'EDITOR',
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  last_login_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `sessions` (
-  `id` CHAR(64) PRIMARY KEY,
-  `user_id` BIGINT UNSIGNED NULL,
-  `ip_address` VARBINARY(16) NULL,
-  `user_agent` VARCHAR(255) NULL,
-  `payload` MEDIUMTEXT NOT NULL,
-  `last_activity_at` DATETIME NOT NULL,
-  CONSTRAINT `fk_sessions_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE SET NULL,
-  INDEX `idx_sessions_last_activity` (`last_activity_at`)
+CREATE TABLE IF NOT EXISTS sessions (
+  id CHAR(64) PRIMARY KEY,
+  user_id BIGINT UNSIGNED NULL,
+  ip_address VARBINARY(16) NULL,
+  user_agent VARCHAR(255) NULL,
+  payload MEDIUMTEXT NOT NULL,
+  last_activity_at DATETIME NOT NULL,
+  CONSTRAINT fk_sessions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+  INDEX idx_sessions_last_activity (last_activity_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `categories` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`parent_id` BIGINT UNSIGNED NULL,`name` VARCHAR(190) NOT NULL,`slug` VARCHAR(190) NOT NULL UNIQUE,`description` TEXT NULL,`icon` VARCHAR(20) NULL,`sort_order` INT NOT NULL DEFAULT 0,`is_active` TINYINT(1) NOT NULL DEFAULT 1,`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,CONSTRAINT `fk_categories_parent` FOREIGN KEY (`parent_id`) REFERENCES `categories`(`id`) ON DELETE SET NULL,INDEX `idx_categories_active_order` (`is_active`, `sort_order`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `stores` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`category_id` BIGINT UNSIGNED NULL,`name` VARCHAR(190) NOT NULL,`slug` VARCHAR(190) NOT NULL UNIQUE,`description` TEXT NULL,`website_url` VARCHAR(255) NULL,`logo_path` VARCHAR(255) NULL,`network_store_id` VARCHAR(120) NULL,`is_featured` TINYINT(1) NOT NULL DEFAULT 0,`is_active` TINYINT(1) NOT NULL DEFAULT 1,`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,CONSTRAINT `fk_stores_category` FOREIGN KEY (`category_id`) REFERENCES `categories`(`id`) ON DELETE SET NULL,INDEX `idx_stores_active_featured` (`is_active`, `is_featured`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `offers` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`store_id` BIGINT UNSIGNED NOT NULL,`category_id` BIGINT UNSIGNED NULL,`title` VARCHAR(255) NOT NULL,`slug` VARCHAR(255) NOT NULL UNIQUE,`description` TEXT NULL,`offer_type` ENUM('CODICE','OFFERTA') NOT NULL,`coupon_code` VARCHAR(100) NULL,`affiliate_url` VARCHAR(500) NOT NULL,`external_id` VARCHAR(120) NULL,`dedupe_hash` CHAR(40) NULL,`status` ENUM('DRAFT','ACTIVE','SCHEDULED','EXPIRED','DISABLED') NOT NULL DEFAULT 'DRAFT',`priority` INT NOT NULL DEFAULT 0,`badge` VARCHAR(80) NULL,`starts_at` DATETIME NULL,`expires_at` DATETIME NULL,`is_featured` TINYINT(1) NOT NULL DEFAULT 0,`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,CONSTRAINT `fk_offers_store` FOREIGN KEY (`store_id`) REFERENCES `stores`(`id`) ON DELETE CASCADE,CONSTRAINT `fk_offers_category` FOREIGN KEY (`category_id`) REFERENCES `categories`(`id`) ON DELETE SET NULL,INDEX `idx_offers_status_featured` (`status`, `is_featured`, `priority`),INDEX `idx_offers_store_status` (`store_id`, `status`),UNIQUE KEY `uniq_offers_external_hash` (`external_id`, `dedupe_hash`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `offer_status_log` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`offer_id` BIGINT UNSIGNED NOT NULL,`old_status` VARCHAR(40) NOT NULL,`new_status` VARCHAR(40) NOT NULL,`reason` VARCHAR(255) NULL,`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT `fk_offer_status_log_offer` FOREIGN KEY (`offer_id`) REFERENCES `offers`(`id`) ON DELETE CASCADE,INDEX `idx_offer_status_log_offer_created` (`offer_id`, `created_at`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `affiliate_networks` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`name` VARCHAR(120) NOT NULL UNIQUE,`slug` VARCHAR(120) NOT NULL UNIQUE,`api_base_url` VARCHAR(255) NULL,`publisher_id` VARCHAR(120) NULL,`is_active` TINYINT(1) NOT NULL DEFAULT 1,`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `affiliate_programs` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`network_id` BIGINT UNSIGNED NOT NULL,`store_id` BIGINT UNSIGNED NULL,`external_program_id` VARCHAR(120) NOT NULL,`name` VARCHAR(255) NOT NULL,`status` ENUM('ACTIVE','PAUSED','DISABLED') NOT NULL DEFAULT 'ACTIVE',`commission_type` VARCHAR(60) NULL,`last_synced_at` DATETIME NULL,`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,CONSTRAINT `fk_affiliate_programs_network` FOREIGN KEY (`network_id`) REFERENCES `affiliate_networks`(`id`) ON DELETE CASCADE,CONSTRAINT `fk_affiliate_programs_store` FOREIGN KEY (`store_id`) REFERENCES `stores`(`id`) ON DELETE SET NULL,UNIQUE KEY `uniq_affiliate_program_network_external` (`network_id`, `external_program_id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `affiliate_mappings` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`offer_id` BIGINT UNSIGNED NOT NULL,`program_id` BIGINT UNSIGNED NOT NULL,`external_id` VARCHAR(120) NOT NULL,`external_hash` CHAR(40) NOT NULL,`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT `fk_affiliate_mappings_offer` FOREIGN KEY (`offer_id`) REFERENCES `offers`(`id`) ON DELETE CASCADE,CONSTRAINT `fk_affiliate_mappings_program` FOREIGN KEY (`program_id`) REFERENCES `affiliate_programs`(`id`) ON DELETE CASCADE,UNIQUE KEY `uniq_affiliate_mapping_external_hash` (`external_id`, `external_hash`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `clicks` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`offer_id` BIGINT UNSIGNED NOT NULL,`session_id` CHAR(64) NULL,`store_id` BIGINT UNSIGNED NULL,`referer` VARCHAR(255) NULL,`device_type` VARCHAR(40) NULL,`anonymized_ip` VARBINARY(16) NULL,`user_agent_hash` CHAR(64) NULL,`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT `fk_clicks_offer` FOREIGN KEY (`offer_id`) REFERENCES `offers`(`id`) ON DELETE CASCADE,CONSTRAINT `fk_clicks_store` FOREIGN KEY (`store_id`) REFERENCES `stores`(`id`) ON DELETE SET NULL,INDEX `idx_clicks_offer_created` (`offer_id`, `created_at`),INDEX `idx_clicks_store_created` (`store_id`, `created_at`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `click_analytics_daily` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`date` DATE NOT NULL,`offer_id` BIGINT UNSIGNED NULL,`store_id` BIGINT UNSIGNED NULL,`click_count` INT NOT NULL DEFAULT 0,`conversion_count` INT NOT NULL DEFAULT 0,`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT `fk_click_analytics_offer` FOREIGN KEY (`offer_id`) REFERENCES `offers`(`id`) ON DELETE SET NULL,CONSTRAINT `fk_click_analytics_store` FOREIGN KEY (`store_id`) REFERENCES `stores`(`id`) ON DELETE SET NULL,UNIQUE KEY `uniq_click_analytics_daily` (`date`, `offer_id`, `store_id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `newsletter_subscribers` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`email` VARCHAR(190) NOT NULL UNIQUE,`status` ENUM('PENDING','SUBSCRIBED','UNSUBSCRIBED') NOT NULL DEFAULT 'PENDING',`subscribed_at` DATETIME NULL,`unsubscribed_at` DATETIME NULL,`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `newsletter_logs` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`subscriber_id` BIGINT UNSIGNED NOT NULL,`event_type` ENUM('OPT_IN','OPT_OUT','SEND') NOT NULL,`payload` JSON NULL,`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT `fk_newsletter_logs_subscriber` FOREIGN KEY (`subscriber_id`) REFERENCES `newsletter_subscribers`(`id`) ON DELETE CASCADE,INDEX `idx_newsletter_logs_created` (`created_at`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `seo_metadata` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`entity_type` VARCHAR(60) NOT NULL,`entity_id` BIGINT UNSIGNED NOT NULL,`meta_title` VARCHAR(255) NULL,`meta_description` VARCHAR(320) NULL,`canonical_url` VARCHAR(255) NULL,`json_ld` JSON NULL,`robots` VARCHAR(120) NULL,`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,UNIQUE KEY `uniq_seo_metadata_entity` (`entity_type`, `entity_id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `sitemap_cache` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`path` VARCHAR(255) NOT NULL UNIQUE,`content_hash` CHAR(40) NOT NULL,`generated_at` DATETIME NOT NULL,`expires_at` DATETIME NULL,`payload` MEDIUMTEXT NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `verification_status` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`offer_id` BIGINT UNSIGNED NOT NULL,`link_status` ENUM('VALID','BROKEN','TIMEOUT') NOT NULL,`code_status` ENUM('VALID','INVALID','UNKNOWN') NOT NULL DEFAULT 'UNKNOWN',`checked_at` DATETIME NOT NULL,`notes` VARCHAR(255) NULL,CONSTRAINT `fk_verification_status_offer` FOREIGN KEY (`offer_id`) REFERENCES `offers`(`id`) ON DELETE CASCADE,INDEX `idx_verification_status_checked` (`checked_at`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `audit_logs` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`user_id` BIGINT UNSIGNED NULL,`action` VARCHAR(120) NOT NULL,`entity_type` VARCHAR(60) NULL,`entity_id` BIGINT UNSIGNED NULL,`ip_address` VARBINARY(16) NULL,`payload` JSON NULL,`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT `fk_audit_logs_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE SET NULL,INDEX `idx_audit_logs_created` (`created_at`),INDEX `idx_audit_logs_action` (`action`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `system_config` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`config_key` VARCHAR(190) NOT NULL UNIQUE,`config_value` TEXT NULL,`autoload` TINYINT(1) NOT NULL DEFAULT 1,`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `cron_logs` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`job_name` VARCHAR(120) NOT NULL,`status` ENUM('SUCCESS','ERROR','PARTIAL') NOT NULL,`message` VARCHAR(255) NULL,`payload` JSON NULL,`started_at` DATETIME NOT NULL,`finished_at` DATETIME NULL,INDEX `idx_cron_logs_job_started` (`job_name`, `started_at`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `import_logs` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`network_id` BIGINT UNSIGNED NULL,`status` ENUM('NEW','UPDATED','DUPLICATE','ERROR') NOT NULL,`processed_count` INT NOT NULL DEFAULT 0,`duplicate_count` INT NOT NULL DEFAULT 0,`error_count` INT NOT NULL DEFAULT 0,`payload` JSON NULL,`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT `fk_import_logs_network` FOREIGN KEY (`network_id`) REFERENCES `affiliate_networks`(`id`) ON DELETE SET NULL,INDEX `idx_import_logs_created` (`created_at`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `cache_entries` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`cache_key` VARCHAR(190) NOT NULL UNIQUE,`cache_value` MEDIUMTEXT NOT NULL,`expires_at` DATETIME NULL,`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,INDEX `idx_cache_entries_expires` (`expires_at`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `search_index` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`entity_type` VARCHAR(60) NOT NULL,`entity_id` BIGINT UNSIGNED NOT NULL,`title` VARCHAR(255) NOT NULL,`content` MEDIUMTEXT NOT NULL,`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,FULLTEXT KEY `ft_search_index` (`title`, `content`),UNIQUE KEY `uniq_search_index_entity` (`entity_type`, `entity_id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `offer_ratings` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`offer_id` BIGINT UNSIGNED NOT NULL,`rating` TINYINT UNSIGNED NOT NULL,`comment` VARCHAR(255) NULL,`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT `fk_offer_ratings_offer` FOREIGN KEY (`offer_id`) REFERENCES `offers`(`id`) ON DELETE CASCADE,INDEX `idx_offer_ratings_offer` (`offer_id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `tags` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`name` VARCHAR(100) NOT NULL,`slug` VARCHAR(120) NOT NULL UNIQUE,`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `offer_tags` (`offer_id` BIGINT UNSIGNED NOT NULL,`tag_id` BIGINT UNSIGNED NOT NULL,`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY (`offer_id`, `tag_id`),CONSTRAINT `fk_offer_tags_offer` FOREIGN KEY (`offer_id`) REFERENCES `offers`(`id`) ON DELETE CASCADE,CONSTRAINT `fk_offer_tags_tag` FOREIGN KEY (`tag_id`) REFERENCES `tags`(`id`) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `import_queue` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`network_id` BIGINT UNSIGNED NOT NULL,`status` ENUM('PENDING','PROCESSING','COMPLETED','FAILED') NOT NULL DEFAULT 'PENDING',`scheduled_at` DATETIME NOT NULL,`started_at` DATETIME NULL,`finished_at` DATETIME NULL,`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT `fk_import_queue_network` FOREIGN KEY (`network_id`) REFERENCES `affiliate_networks`(`id`) ON DELETE CASCADE,INDEX `idx_import_queue_status_scheduled` (`status`, `scheduled_at`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `import_queue_items` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`queue_id` BIGINT UNSIGNED NOT NULL,`external_id` VARCHAR(120) NOT NULL,`payload` JSON NOT NULL,`status` ENUM('NEW','UPDATED','DUPLICATE','ERROR') NOT NULL DEFAULT 'NEW',`message` VARCHAR(255) NULL,`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT `fk_import_queue_items_queue` FOREIGN KEY (`queue_id`) REFERENCES `import_queue`(`id`) ON DELETE CASCADE,INDEX `idx_import_queue_items_status` (`status`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `settings` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`setting_group` VARCHAR(120) NOT NULL,`setting_key` VARCHAR(190) NOT NULL,`setting_value` TEXT NULL,`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,UNIQUE KEY `uniq_settings_group_key` (`setting_group`, `setting_key`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `feature_flags` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`flag_key` VARCHAR(190) NOT NULL UNIQUE,`is_enabled` TINYINT(1) NOT NULL DEFAULT 0,`rollout_percentage` TINYINT UNSIGNED NOT NULL DEFAULT 100,`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `api_keys` (`id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`network_id` BIGINT UNSIGNED NULL,`name` VARCHAR(120) NOT NULL,`key_hash` CHAR(64) NOT NULL,`last_used_at` DATETIME NULL,`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,CONSTRAINT `fk_api_keys_network` FOREIGN KEY (`network_id`) REFERENCES `affiliate_networks`(`id`) ON DELETE SET NULL,UNIQUE KEY `uniq_api_keys_name` (`name`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS `seo_title_cache` (
-  `id` INT PRIMARY KEY AUTO_INCREMENT,
-  `page_type` VARCHAR(50) NOT NULL COMMENT 'home, category, store, offer, search',
-  `page_id` INT NULL,
-  `title` TEXT NULL,
-  `meta_description` TEXT NULL,
-  `keywords` TEXT NULL,
-  `cached_month` TINYINT UNSIGNED NOT NULL,
-  `cached_year` SMALLINT UNSIGNED NOT NULL,
-  `generated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY `uniq_seo_title_cache_page` (`page_type`, `page_id`, `cached_month`, `cached_year`),
-  KEY `idx_seo_title_cache_type_month_year` (`page_type`, `cached_month`, `cached_year`)
+CREATE TABLE IF NOT EXISTS categories (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  parent_id BIGINT UNSIGNED NULL,
+  name VARCHAR(190) NOT NULL,
+  slug VARCHAR(190) NOT NULL UNIQUE,
+  description TEXT NULL,
+  icon VARCHAR(20) NULL,
+  sort_order INT NOT NULL DEFAULT 0,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_categories_parent FOREIGN KEY (parent_id) REFERENCES categories(id) ON DELETE SET NULL,
+  INDEX idx_categories_active_order (is_active, sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS stores (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  category_id BIGINT UNSIGNED NULL,
+  name VARCHAR(190) NOT NULL,
+  slug VARCHAR(190) NOT NULL UNIQUE,
+  description TEXT NULL,
+  website_url VARCHAR(255) NULL,
+  logo_path VARCHAR(255) NULL,
+  network_store_id VARCHAR(120) NULL,
+  is_featured TINYINT(1) NOT NULL DEFAULT 0,
+  click_count INT NOT NULL DEFAULT 0,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_stores_category FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL,
+  INDEX idx_stores_active_featured (is_active, is_featured),
+  INDEX idx_stores_click_count (click_count)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS offers (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  store_id BIGINT UNSIGNED NOT NULL,
+  category_id BIGINT UNSIGNED NULL,
+  title VARCHAR(255) NOT NULL,
+  slug VARCHAR(255) NOT NULL UNIQUE,
+  description TEXT NULL,
+  offer_type ENUM('CODICE','OFFERTA') NOT NULL,
+  coupon_code VARCHAR(100) NULL,
+  discount_type ENUM('PERCENT','AMOUNT','NONE') NOT NULL DEFAULT 'NONE',
+  discount_value DECIMAL(10,2) NULL,
+  affiliate_url VARCHAR(500) NOT NULL,
+  external_id VARCHAR(120) NULL,
+  dedupe_hash CHAR(40) NULL,
+  status ENUM('DRAFT','ACTIVE','SCHEDULED','EXPIRED','DISABLED') NOT NULL DEFAULT 'DRAFT',
+  priority INT NOT NULL DEFAULT 0,
+  badge VARCHAR(80) NULL,
+  starts_at DATETIME NULL,
+  expires_at DATETIME NULL,
+  is_featured TINYINT(1) NOT NULL DEFAULT 0,
+  click_count INT NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_offers_store FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE,
+  CONSTRAINT fk_offers_category FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL,
+  INDEX idx_offers_status_featured (status, is_featured, priority),
+  INDEX idx_offers_store_status (store_id, status),
+  INDEX idx_offers_click_count (click_count),
+  UNIQUE KEY uniq_offers_external_hash (external_id, dedupe_hash)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS offer_status_log (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  offer_id BIGINT UNSIGNED NOT NULL,
+  old_status VARCHAR(40) NOT NULL,
+  new_status VARCHAR(40) NOT NULL,
+  reason VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_offer_status_log_offer FOREIGN KEY (offer_id) REFERENCES offers(id) ON DELETE CASCADE,
+  INDEX idx_offer_status_log_offer_created (offer_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS affiliate_networks (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(120) NOT NULL UNIQUE,
+  slug VARCHAR(120) NOT NULL UNIQUE,
+  api_base_url VARCHAR(255) NULL,
+  publisher_id VARCHAR(120) NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS affiliate_programs (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  network_id BIGINT UNSIGNED NOT NULL,
+  store_id BIGINT UNSIGNED NULL,
+  external_program_id VARCHAR(120) NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  status ENUM('ACTIVE','PAUSED','DISABLED') NOT NULL DEFAULT 'ACTIVE',
+  commission_type VARCHAR(60) NULL,
+  last_synced_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_affiliate_programs_network FOREIGN KEY (network_id) REFERENCES affiliate_networks(id) ON DELETE CASCADE,
+  CONSTRAINT fk_affiliate_programs_store FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE SET NULL,
+  UNIQUE KEY uniq_affiliate_program_network_external (network_id, external_program_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS affiliate_mappings (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  offer_id BIGINT UNSIGNED NOT NULL,
+  program_id BIGINT UNSIGNED NOT NULL,
+  external_id VARCHAR(120) NOT NULL,
+  external_hash CHAR(40) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_affiliate_mappings_offer FOREIGN KEY (offer_id) REFERENCES offers(id) ON DELETE CASCADE,
+  CONSTRAINT fk_affiliate_mappings_program FOREIGN KEY (program_id) REFERENCES affiliate_programs(id) ON DELETE CASCADE,
+  UNIQUE KEY uniq_affiliate_mapping_external_hash (external_id, external_hash)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS clicks (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  offer_id BIGINT UNSIGNED NOT NULL,
+  session_id CHAR(64) NULL,
+  store_id BIGINT UNSIGNED NULL,
+  referer VARCHAR(255) NULL,
+  ip_address VARBINARY(16) NULL,
+  user_agent VARCHAR(255) NULL,
+  device_type VARCHAR(40) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_clicks_offer FOREIGN KEY (offer_id) REFERENCES offers(id) ON DELETE CASCADE,
+  CONSTRAINT fk_clicks_store FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE SET NULL,
+  INDEX idx_clicks_offer_created (offer_id, created_at),
+  INDEX idx_clicks_store_created (store_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS click_analytics_daily (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  date DATE NOT NULL,
+  offer_id BIGINT UNSIGNED NULL,
+  store_id BIGINT UNSIGNED NULL,
+  click_count INT NOT NULL DEFAULT 0,
+  conversion_count INT NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_click_analytics_offer FOREIGN KEY (offer_id) REFERENCES offers(id) ON DELETE SET NULL,
+  CONSTRAINT fk_click_analytics_store FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE SET NULL,
+  UNIQUE KEY uniq_click_analytics_daily (date, offer_id, store_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS page_views (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  path VARCHAR(255) NOT NULL,
+  referer VARCHAR(255) NULL,
+  session_id CHAR(64) NULL,
+  ip_address VARBINARY(16) NULL,
+  user_agent VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_page_views_created (created_at),
+  INDEX idx_page_views_path (path)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS newsletter_subscribers (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  email VARCHAR(190) NOT NULL UNIQUE,
+  status ENUM('PENDING','SUBSCRIBED','UNSUBSCRIBED') NOT NULL DEFAULT 'PENDING',
+  subscribed_at DATETIME NULL,
+  unsubscribed_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS newsletter_logs (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  subscriber_id BIGINT UNSIGNED NOT NULL,
+  event_type ENUM('OPT_IN','OPT_OUT','SEND') NOT NULL,
+  payload JSON NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_newsletter_logs_subscriber FOREIGN KEY (subscriber_id) REFERENCES newsletter_subscribers(id) ON DELETE CASCADE,
+  INDEX idx_newsletter_logs_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS seo_metadata (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  entity_type VARCHAR(60) NOT NULL,
+  entity_id BIGINT UNSIGNED NOT NULL,
+  meta_title VARCHAR(255) NULL,
+  meta_description VARCHAR(320) NULL,
+  canonical_url VARCHAR(255) NULL,
+  json_ld JSON NULL,
+  robots VARCHAR(120) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_seo_metadata_entity (entity_type, entity_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS sitemap_cache (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  path VARCHAR(255) NOT NULL UNIQUE,
+  content_hash CHAR(40) NOT NULL,
+  generated_at DATETIME NOT NULL,
+  expires_at DATETIME NULL,
+  payload MEDIUMTEXT NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS verification_status (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  offer_id BIGINT UNSIGNED NOT NULL,
+  link_status ENUM('VALID','BROKEN','TIMEOUT') NOT NULL,
+  code_status ENUM('VALID','INVALID','UNKNOWN') NOT NULL DEFAULT 'UNKNOWN',
+  checked_at DATETIME NOT NULL,
+  notes VARCHAR(255) NULL,
+  CONSTRAINT fk_verification_status_offer FOREIGN KEY (offer_id) REFERENCES offers(id) ON DELETE CASCADE,
+  INDEX idx_verification_status_checked (checked_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT UNSIGNED NULL,
+  action VARCHAR(120) NOT NULL,
+  entity_type VARCHAR(60) NULL,
+  entity_id BIGINT UNSIGNED NULL,
+  ip_address VARBINARY(16) NULL,
+  payload JSON NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_audit_logs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+  INDEX idx_audit_logs_created (created_at),
+  INDEX idx_audit_logs_action (action)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS system_config (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  config_key VARCHAR(190) NOT NULL UNIQUE,
+  config_value TEXT NULL,
+  autoload TINYINT(1) NOT NULL DEFAULT 1,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS cron_logs (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  job_name VARCHAR(120) NOT NULL,
+  status ENUM('SUCCESS','ERROR','PARTIAL') NOT NULL,
+  message VARCHAR(255) NULL,
+  payload JSON NULL,
+  started_at DATETIME NOT NULL,
+  finished_at DATETIME NULL,
+  INDEX idx_cron_logs_job_started (job_name, started_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS import_logs (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  network_id BIGINT UNSIGNED NULL,
+  status ENUM('NEW','UPDATED','DUPLICATE','ERROR') NOT NULL,
+  processed_count INT NOT NULL DEFAULT 0,
+  duplicate_count INT NOT NULL DEFAULT 0,
+  error_count INT NOT NULL DEFAULT 0,
+  payload JSON NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_import_logs_network FOREIGN KEY (network_id) REFERENCES affiliate_networks(id) ON DELETE SET NULL,
+  INDEX idx_import_logs_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS cache_entries (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  cache_key VARCHAR(190) NOT NULL UNIQUE,
+  cache_value MEDIUMTEXT NOT NULL,
+  expires_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_cache_entries_expires (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS search_index (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  entity_type VARCHAR(60) NOT NULL,
+  entity_id BIGINT UNSIGNED NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  content MEDIUMTEXT NOT NULL,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FULLTEXT KEY ft_search_index (title, content),
+  UNIQUE KEY uniq_search_index_entity (entity_type, entity_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS offer_ratings (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  offer_id BIGINT UNSIGNED NOT NULL,
+  rating TINYINT UNSIGNED NOT NULL,
+  comment VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_offer_ratings_offer FOREIGN KEY (offer_id) REFERENCES offers(id) ON DELETE CASCADE,
+  INDEX idx_offer_ratings_offer (offer_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS tags (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  slug VARCHAR(120) NOT NULL UNIQUE,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS offer_tags (
+  offer_id BIGINT UNSIGNED NOT NULL,
+  tag_id BIGINT UNSIGNED NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (offer_id, tag_id),
+  CONSTRAINT fk_offer_tags_offer FOREIGN KEY (offer_id) REFERENCES offers(id) ON DELETE CASCADE,
+  CONSTRAINT fk_offer_tags_tag FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS import_queue (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  network_id BIGINT UNSIGNED NOT NULL,
+  status ENUM('PENDING','PROCESSING','COMPLETED','FAILED') NOT NULL DEFAULT 'PENDING',
+  scheduled_at DATETIME NOT NULL,
+  started_at DATETIME NULL,
+  finished_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_import_queue_network FOREIGN KEY (network_id) REFERENCES affiliate_networks(id) ON DELETE CASCADE,
+  INDEX idx_import_queue_status_scheduled (status, scheduled_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS import_queue_items (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  queue_id BIGINT UNSIGNED NOT NULL,
+  external_id VARCHAR(120) NOT NULL,
+  payload JSON NOT NULL,
+  status ENUM('NEW','UPDATED','DUPLICATE','ERROR') NOT NULL DEFAULT 'NEW',
+  message VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_import_queue_items_queue FOREIGN KEY (queue_id) REFERENCES import_queue(id) ON DELETE CASCADE,
+  INDEX idx_import_queue_items_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS settings (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  setting_group VARCHAR(120) NOT NULL,
+  setting_key VARCHAR(190) NOT NULL,
+  setting_value TEXT NULL,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_settings_group_key (setting_group, setting_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS feature_flags (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  flag_key VARCHAR(190) NOT NULL UNIQUE,
+  is_enabled TINYINT(1) NOT NULL DEFAULT 0,
+  rollout_percentage TINYINT UNSIGNED NOT NULL DEFAULT 100,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS api_keys (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  network_id BIGINT UNSIGNED NULL,
+  name VARCHAR(120) NOT NULL,
+  key_hash CHAR(64) NOT NULL,
+  last_used_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_api_keys_network FOREIGN KEY (network_id) REFERENCES affiliate_networks(id) ON DELETE SET NULL,
+  UNIQUE KEY uniq_api_keys_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS seo_title_cache (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  page_type VARCHAR(50) NOT NULL COMMENT 'home, category, store, offer, search',
+  page_id INT NULL,
+  title TEXT NULL,
+  meta_description TEXT NULL,
+  keywords TEXT NULL,
+  cached_month TINYINT UNSIGNED NOT NULL,
+  cached_year SMALLINT UNSIGNED NOT NULL,
+  generated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_seo_title_cache_page (page_type, page_id, cached_month, cached_year),
+  KEY idx_seo_title_cache_type_month_year (page_type, cached_month, cached_year)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

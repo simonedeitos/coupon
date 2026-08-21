@@ -58,6 +58,12 @@ final class TradeDoublerController
         }
 
         $result = app('tradeDoublerImport')->import($items, $system, $markFeatured);
+        $this->writeAudit('import:tradedoubler', 'offers', null, [
+            'system' => $system,
+            'imported' => $result['imported'],
+            'duplicates' => $result['duplicates'],
+            'errors' => $result['errors'],
+        ]);
 
         app('cache')->appendJsonLine('logs', 'audit.log', [
             'action' => 'tradedoubler:import',
@@ -73,5 +79,29 @@ final class TradeDoublerController
         flash($result['errors'] > 0 ? 'error' : 'success', $message);
 
         return redirect('/admin/tradedoubler');
+    }
+
+    private function writeAudit(string $action, string $entityType, ?int $entityId, array $payload = []): void
+    {
+        $db = app('db');
+        if ($db === null) {
+            return;
+        }
+        $user = app('auth')->user();
+        try {
+            $db->prepare(
+                'INSERT INTO audit_logs (user_id, action, entity_type, entity_id, ip_address, payload, created_at)
+                 VALUES (?, ?, ?, ?, INET6_ATON(?), ?, NOW())'
+            )->execute([
+                isset($user['id']) ? (int) $user['id'] : null,
+                $action,
+                $entityType,
+                $entityId,
+                $_SERVER['REMOTE_ADDR'] ?? null,
+                json_encode($payload, JSON_UNESCAPED_UNICODE),
+            ]);
+        } catch (\Throwable $e) {
+            error_log('TradeDoublerController::writeAudit failed: ' . $e->getMessage());
+        }
     }
 }

@@ -1,51 +1,73 @@
+<?php
+$heroOffers = ! empty($todayOffers) ? $todayOffers : $offers;
+$heroOffer = $heroOffers[0] ?? null;
+$heroStore = null;
+$heroDiscountLabel = '';
+$heroSlides = [];
+if ($heroOffer !== null) {
+    $heroStore = $storesById[(int) $heroOffer['store_id']] ?? app('storeRepository')->findById((int) $heroOffer['store_id']);
+    $heroDiscountLabel = \App\Helpers\OfferHelper::formatDiscount($heroOffer);
+}
+foreach ($heroOffers as $offerItem) {
+    $offerStore = $storesById[(int) $offerItem['store_id']] ?? app('storeRepository')->findById((int) $offerItem['store_id']);
+    $heroSlides[] = [
+        'title' => (string) ($offerItem['title'] ?? ''),
+        'description' => (string) ($offerItem['description'] ?? ''),
+        'code' => (string) ($offerItem['code'] ?? ''),
+        'track_url' => (string) url('/go/' . $offerItem['id']),
+        'discount_label' => \App\Helpers\OfferHelper::formatDiscount($offerItem),
+        'store_name' => (string) ($offerStore['name'] ?? 'Store'),
+        'type_label' => \App\Helpers\OfferHelper::getOfferTypeLabel((string) ($offerItem['type'] ?? '')),
+    ];
+}
+?>
 <section class="hero">
     <div class="container hero-inner">
         <div>
-            <div class="eyebrow">✦ Risparmia ad ogni acquisto</div>
-            <h1>Trova il tuo prossimo <em>affare.</em></h1>
-            <p>Codici sconto, coupon e offerte dei tuoi negozi preferiti. Cerca, scegli e risparmia in pochi secondi.</p>
-            <form class="search search-compact" action="<?php echo e(url('/cerca')); ?>" method="get">
+            <form class="search search-compact hero-search-top" action="<?php echo e(url('/cerca')); ?>" method="get">
                 <span class="search-icon">⌕</span>
                 <input type="search" name="q" placeholder="Cerca coupon, negozio o categoria..." aria-label="Cerca coupon">
                 <button type="submit">Cerca</button>
             </form>
-            <div class="category-filters">
+            <div class="category-filters category-filters-top">
                 <?php foreach (array_slice($categories, 0, 8) as $category): ?>
                     <a class="pill" href="<?php echo e(url('/categoria/' . $category['slug'])); ?>"><?php echo e($category['icon']); ?> <?php echo e($category['name']); ?></a>
                 <?php endforeach; ?>
             </div>
+            <div class="eyebrow">✦ Risparmia ad ogni acquisto</div>
+            <h1>Trova il tuo prossimo <em>affare.</em></h1>
+            <p>Codici sconto, coupon e offerte dei tuoi negozi preferiti. Cerca, scegli e risparmia in pochi secondi.</p>
             <div class="hero-stats">
                 <div class="stat"><strong><?php echo e($stats['total_offers'] ?? count($offers)); ?></strong><small>coupon attivi</small></div>
                 <div class="stat"><strong><?php echo e($stats['total_stores'] ?? count($stores)); ?></strong><small>negozi partner</small></div>
                 <div class="stat"><strong><?php echo e($stats['total_categories'] ?? count($categories)); ?></strong><small>categorie</small></div>
             </div>
         </div>
-        <div class="hero-card">
-            <div class="floating-badge">🔥 OFFERTA DEL GIORNO</div>
-            <?php if (! empty($offers[0])): ?>
-                <?php $featuredOffer = $offers[0]; $featuredStore = app('storeRepository')->findById((int) $featuredOffer['store_id']); ?>
-                <?php $discountLabel = \App\Helpers\OfferHelper::formatDiscount($featuredOffer); ?>
+        <?php if ($heroOffer !== null): ?>
+            <div class="hero-card" data-hero-offer-rotator data-hero-offers="<?php echo e(json_encode($heroSlides, JSON_UNESCAPED_UNICODE)); ?>">
+                <div class="floating-badge">🔥 OFFERTA DEL GIORNO</div>
                 <div class="mock-store">
-                    <div class="store-logo"><?php echo e($featuredStore['initial'] ?? '?'); ?></div>
-                    <div><strong><?php echo e($featuredStore['name'] ?? 'Store'); ?></strong><small><?php echo e($featuredOffer['type']); ?></small></div>
+                    <div class="store-logo"><?php echo e($heroStore['initial'] ?? '?'); ?></div>
+                    <div><strong data-hero-store-name><?php echo e($heroStore['name'] ?? 'Store'); ?></strong><small data-hero-offer-type><?php echo e(\App\Helpers\OfferHelper::getOfferTypeLabel((string) $heroOffer['type'])); ?></small></div>
                 </div>
                 <div class="mock-offer">
-                    <?php if ($discountLabel !== ''): ?>
-                        <div class="discount"><?php echo e($discountLabel); ?></div>
-                    <?php endif; ?>
-                    <h3><?php echo e($featuredOffer['title']); ?></h3>
-                    <p><?php echo e($featuredOffer['description']); ?></p>
+                    <div class="discount" data-hero-discount <?php echo $heroDiscountLabel === '' ? 'hidden' : ''; ?>><?php echo e($heroDiscountLabel); ?></div>
+                    <h3 data-hero-title><?php echo e($heroOffer['title']); ?></h3>
+                    <p data-hero-description><?php echo e($heroOffer['description']); ?></p>
                 </div>
-                <?php if (! empty($featuredOffer['code'])): ?>
-                    <button class="mock-button" type="button"
-                        data-offer-code="<?php echo e($featuredOffer['code']); ?>"
-                        data-offer-track="<?php echo e(url('/go/' . $featuredOffer['id'])); ?>">
-                        Mostra codice
-                    </button>
-                <?php else: ?>
-                    <a class="mock-button" href="<?php echo e(url('/go/' . $featuredOffer['id'])); ?>" rel="nofollow sponsored noopener" target="_blank">Vai all'offerta</a>
-                <?php endif; ?>
-            <?php endif; ?>
-        </div>
+                <button class="mock-button" type="button"
+                    data-hero-code-button
+                    data-offer-code="<?php echo e($heroOffer['code'] ?? ''); ?>"
+                    data-offer-track="<?php echo e(url('/go/' . $heroOffer['id'])); ?>"
+                    <?php echo empty($heroOffer['code']) ? 'hidden' : ''; ?>>
+                    Mostra codice
+                </button>
+                <a class="mock-button" data-hero-direct-link href="<?php echo e(url('/go/' . $heroOffer['id'])); ?>"
+                    rel="nofollow sponsored noopener noreferrer" target="_blank"
+                    <?php echo ! empty($heroOffer['code']) ? 'hidden' : ''; ?>>
+                    Vai all'offerta
+                </a>
+            </div>
+        <?php endif; ?>
     </div>
 </section>

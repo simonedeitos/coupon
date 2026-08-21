@@ -8,33 +8,22 @@ final class OfferHelper
 {
     public static function formatDiscount(array $offer): string
     {
-        $discountType = strtoupper((string) ($offer['discount_type'] ?? ''));
-        $discount = trim((string) ($offer['discount'] ?? ''));
-        $numericValue = is_numeric($discount) ? (float) $discount : null;
+        $discountType = strtoupper((string) ($offer['discount_type'] ?? 'NONE'));
+        $rawValue = $offer['discount_value'] ?? null;
+        $discountValue = is_numeric($rawValue) ? (float) $rawValue : null;
 
-        // Se abbiamo tipo esplicito e valore numerico > 0
-        if ($discountType === 'PERCENT' && $numericValue !== null && $numericValue > 0) {
-            return 'SCONTO ' . rtrim(rtrim(number_format($numericValue, 2), '0'), '.') . '%';
-        }
-        if ($discountType === 'AMOUNT' && $numericValue !== null && $numericValue > 0) {
-            return 'SCONTO ' . rtrim(rtrim(number_format($numericValue, 2), '0'), '.') . '€';
+        if ($discountValue === null || $discountValue <= 0) {
+            return '';
         }
 
-        // Valore già formattato (es. "20%", "10€", "5 EUR")
-        if ($discount !== '' && $discount !== '0' && $discount !== 'null') {
-            // Contiene già simbolo % o € -> restituisci come badge SCONTO
-            if (str_contains($discount, '%') || preg_match('/[€$£]/', $discount)) {
-                return 'SCONTO ' . $discount;
-            }
-            // Valore numerico senza tipo: tenta di interpretarlo come percentuale solo se <= 100
-            if ($numericValue !== null && $numericValue > 0) {
-                return 'SCONTO ' . rtrim(rtrim(number_format($numericValue, 2), '0'), '.') . '%';
-            }
-            // Stringa libera (es. "Gratis spedizione") -> restituisci così
-            return $discount;
+        if ($discountType === 'PERCENT') {
+            return 'SCONTO ' . rtrim(rtrim(number_format($discountValue, 2, '.', ''), '0'), '.') . '%';
         }
 
-        // Nessun valore di sconto -> non mostrare nulla
+        if ($discountType === 'AMOUNT') {
+            return 'SCONTO ' . rtrim(rtrim(number_format($discountValue, 2, '.', ''), '0'), '.') . '€';
+        }
+
         return '';
     }
 

@@ -1,5 +1,5 @@
 <main>
-    <?php echo app('view')->partial('frontend/partials/hero', ['categories' => $categories, 'offers' => $offers, 'stores' => $stores, 'stats' => $stats ?? []]); ?>
+    <?php echo app('view')->partial('frontend/partials/hero', ['categories' => $categories, 'offers' => $offers, 'stores' => $stores, 'storesById' => $storesById, 'todayOffers' => $todayOffers ?? [], 'stats' => $stats ?? []]); ?>
     <section id="categorie"><div class="container"><div class="section-head"><div><h2>Esplora per categoria</h2><p>Trova rapidamente le offerte che ti interessano.</p></div><a class="view-all" href="<?php echo e(url('/categorie')); ?>">Vedi tutte →</a></div><?php echo app('view')->partial('frontend/partials/category-grid', ['categories' => $categories]); ?></div></section>
     <?php if (! empty($todayOffers)): ?>
     <section id="offerta-del-giorno"><div class="container"><div class="section-head"><div><h2>🔥 Offerta del giorno</h2><p>Le offerte più cliccate oggi, aggiornate in tempo reale.</p></div></div><?php echo app('view')->partial('frontend/partials/today-carousel', ['offers' => $todayOffers, 'storesById' => $storesById]); ?></div></section>

@@ -37,6 +37,13 @@ final class AuthService
             'email' => $user['email'] ?? '',
         ];
 
+        if ($this->pdo !== null && ! empty($user['id'])) {
+            try {
+                $this->pdo->prepare('UPDATE users SET last_login_at = NOW() WHERE id = ?')->execute([(int) $user['id']]);
+            } catch (\Throwable) {
+            }
+        }
+
         return true;
     }
 
@@ -97,18 +104,19 @@ final class AuthService
         if ($this->pdo) {
             $queries = [];
             $columns = $this->userColumns();
+            $select = $this->userSelectColumns($columns);
             if ($columns === []) {
                 $queries = [
-                    "SELECT id, username, display_name, role, email FROM users WHERE status = 'ACTIVE' ORDER BY username ASC",
-                    'SELECT id, username, display_name, role, email FROM users WHERE is_active = 1 ORDER BY username ASC',
+                    "SELECT {$select} FROM users WHERE status = 'ACTIVE' ORDER BY username ASC",
+                    "SELECT {$select} FROM users WHERE is_active = 1 ORDER BY username ASC",
                 ];
             } else {
                 if (! empty($columns['status']) && ! empty($columns['is_active'])) {
-                    $queries[] = "SELECT id, username, display_name, role, email FROM users WHERE status = 'ACTIVE' OR is_active = 1 ORDER BY username ASC";
+                    $queries[] = "SELECT {$select} FROM users WHERE status = 'ACTIVE' OR is_active = 1 ORDER BY username ASC";
                 } elseif (! empty($columns['status'])) {
-                    $queries[] = "SELECT id, username, display_name, role, email FROM users WHERE status = 'ACTIVE' ORDER BY username ASC";
+                    $queries[] = "SELECT {$select} FROM users WHERE status = 'ACTIVE' ORDER BY username ASC";
                 } elseif (! empty($columns['is_active'])) {
-                    $queries[] = 'SELECT id, username, display_name, role, email FROM users WHERE is_active = 1 ORDER BY username ASC';
+                    $queries[] = "SELECT {$select} FROM users WHERE is_active = 1 ORDER BY username ASC";
                 }
             }
 
@@ -142,6 +150,8 @@ final class AuthService
             'display_name' => $user['display_name'],
             'role' => $user['role'],
             'email' => $user['email'] ?? '',
+            'is_active' => 1,
+            'last_login_at' => null,
         ], $this->users);
     }
 
@@ -234,5 +244,12 @@ final class AuthService
         }
 
         return $this->userColumns;
+    }
+
+    private function userSelectColumns(array $columns): string
+    {
+        $activeExpr = ! empty($columns['is_active']) ? 'is_active' : '1';
+        $lastLoginExpr = ! empty($columns['last_login_at']) ? 'last_login_at' : 'NULL';
+        return "id, username, display_name, role, email, {$activeExpr} AS is_active, {$lastLoginExpr} AS last_login_at";
     }
 }

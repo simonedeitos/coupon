@@ -16,25 +16,27 @@ final class AnalyticsService
 
     public function logClick(array $offer, string $storeName): void
     {
-        $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
-        $anonymizedIp = preg_replace('/\d+$/', '0', $ip) ?: '0.0.0.0';
+        $ip = $this->anonymizeIp($_SERVER['REMOTE_ADDR'] ?? null);
+        $sessionId = session_id() !== '' ? session_id() : null;
         $device = str_contains(strtolower((string) ($_SERVER['HTTP_USER_AGENT'] ?? '')), 'mobile') ? 'mobile' : 'desktop';
-        $referer = substr((string) ($_SERVER['HTTP_REFERER'] ?? ''), 0, 190);
+        $referer = substr((string) ($_SERVER['HTTP_REFERER'] ?? ''), 0, 255);
+        $userAgent = substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 255);
 
         // Scrivi il click nel DB (fonte di verità)
         if ($this->db !== null) {
             try {
                 $stmt = $this->db->prepare(
-                    'INSERT INTO clicks (offer_id, store_id, referer, device_type, anonymized_ip, user_agent_hash, created_at)
-                     VALUES (?, ?, ?, ?, INET6_ATON(?), ?, NOW())'
+                    'INSERT INTO clicks (offer_id, store_id, session_id, referer, ip_address, user_agent, device_type, created_at)
+                     VALUES (?, ?, ?, ?, INET6_ATON(?), ?, ?, NOW())'
                 );
                 $stmt->execute([
                     (int) $offer['id'],
                     (int) ($offer['store_id'] ?? 0) ?: null,
+                    $sessionId,
                     $referer,
+                    $ip,
+                    $userAgent,
                     $device,
-                    $anonymizedIp,
-                    hash('sha256', (string) ($_SERVER['HTTP_USER_AGENT'] ?? '')),
                 ]);
 
                 // Incrementa contatori aggregati
@@ -67,7 +69,7 @@ final class AnalyticsService
             'store_name' => $storeName,
             'referer' => $referer,
             'device' => $device,
-            'ip' => $anonymizedIp,
+            'ip' => $ip,
             'created_at' => date('c'),
         ];
         $this->cache->appendJsonLine('logs', 'clicks.log', $record);
@@ -80,24 +82,50 @@ final class AnalyticsService
         $this->cache->putCollection('click_daily', $daily);
     }
 
-    public function logPageView(string $url): void
+    public function logPageView(string $path): void
     {
         if ($this->db === null) {
             return;
         }
         try {
-            $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
-            $ipHash = hash('sha256', $ip);
+            $ip = $this->anonymizeIp($_SERVER['REMOTE_ADDR'] ?? null);
+            $sessionId = session_id() !== '' ? session_id() : null;
             $ua = substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 255);
-            $referrer = substr((string) ($_SERVER['HTTP_REFERER'] ?? ''), 0, 500);
+            $referer = substr((string) ($_SERVER['HTTP_REFERER'] ?? ''), 0, 255);
 
             $this->db->prepare(
-                'INSERT INTO page_views (url, referrer, ip_hash, user_agent, created_at)
-                 VALUES (?, ?, ?, ?, NOW())'
-            )->execute([$url, $referrer ?: null, $ipHash, $ua ?: null]);
+                'INSERT INTO page_views (path, referer, session_id, ip_address, user_agent, created_at)
+                 VALUES (?, ?, ?, INET6_ATON(?), ?, NOW())'
+            )->execute([$path, $referer ?: null, $sessionId, $ip, $ua ?: null]);
         } catch (\Throwable $e) {
             error_log('AnalyticsService::logPageView failed: ' . $e->getMessage());
         }
+    }
+
+    private function anonymizeIp(?string $ip): ?string
+    {
+        if ($ip === null || $ip === '') {
+            return null;
+        }
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+            $parts = explode('.', $ip);
+            $parts[3] = '0';
+            return implode('.', $parts);
+        }
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+            $packed = inet_pton($ip);
+            if ($packed === false) {
+                return null;
+            }
+            $bytes = unpack('C*', $packed);
+            for ($i = 9; $i <= 16; $i++) {
+                if (isset($bytes[$i])) {
+                    $bytes[$i] = 0;
+                }
+            }
+            return inet_ntop(pack('C*', ...array_values($bytes))) ?: null;
+        }
+        return null;
     }
 
     public function clickSeries(int $days = 30): array

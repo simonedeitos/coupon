@@ -18,10 +18,10 @@
                     <span class="badge-discount"><?php echo e($discountLabel); ?></span>
                 <?php endif; ?>
                 <?php if ($isAffiliateOnly): ?>
-                    <button class="btn-small" type="button"
-                        onclick="window.open('<?php echo e(url('/go/' . $offer['id'])); ?>','_blank','noopener')">
+                    <a class="btn-small" href="<?php echo e(url('/go/' . $offer['id'])); ?>"
+                        target="_blank" rel="nofollow sponsored noopener noreferrer">
                         Vai al sito
-                    </button>
+                    </a>
                 <?php elseif (! empty($offer['code'])): ?>
                     <button class="btn-small" type="button"
                         data-offer-code="<?php echo e($offer['code']); ?>"

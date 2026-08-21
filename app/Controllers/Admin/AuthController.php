@@ -21,10 +21,6 @@ final class AuthController
         $password = (string) request_input('password', '');
         $key = ($_SERVER['REMOTE_ADDR'] ?? 'cli') . ':' . strtolower($username);
 
-        // DEBUG TEMPORANEO: logga se la connessione DB è disponibile e se l'utente viene trovato
-        $db = app('config')['database'] ?? [];
-        error_log('AuthController::login - DB configured: ' . (empty($db['database']) ? 'NO' : 'YES, db=' . $db['database']));
-
         if (! app('auth')->attempt($username, $password)) {
             app('auth')->hitRateLimit($key);
             flash('error', 'Credenziali non valide.');
@@ -33,6 +29,7 @@ final class AuthController
         }
         app('auth')->clearRateLimit($key);
         clear_old_input();
+        $this->writeAudit('login', 'users', app('auth')->user()['id'] ?? null, ['username' => $username]);
         app('cache')->appendJsonLine('logs', 'audit.log', ['action' => 'login', 'actor' => $username, 'created_at' => date('c')]);
         flash('success', 'Accesso effettuato con successo.');
         return redirect('/admin/dashboard');
@@ -41,9 +38,34 @@ final class AuthController
     public function logout(): array
     {
         $user = app('auth')->user();
+        $this->writeAudit('logout', 'users', $user['id'] ?? null, ['username' => $user['username'] ?? 'guest']);
         app('cache')->appendJsonLine('logs', 'audit.log', ['action' => 'logout', 'actor' => $user['username'] ?? 'guest', 'created_at' => date('c')]);
         app('auth')->logout();
         flash('success', 'Sessione terminata.');
         return redirect('/admin');
+    }
+
+    private function writeAudit(string $action, string $entityType, ?int $entityId, array $payload = []): void
+    {
+        $db = app('db');
+        if ($db === null) {
+            return;
+        }
+        $actorId = app('auth')->user()['id'] ?? $entityId;
+        try {
+            $db->prepare(
+                'INSERT INTO audit_logs (user_id, action, entity_type, entity_id, ip_address, payload, created_at)
+                 VALUES (?, ?, ?, ?, INET6_ATON(?), ?, NOW())'
+            )->execute([
+                $actorId !== null ? (int) $actorId : null,
+                $action,
+                $entityType,
+                $entityId,
+                $_SERVER['REMOTE_ADDR'] ?? null,
+                json_encode($payload, JSON_UNESCAPED_UNICODE),
+            ]);
+        } catch (\Throwable $e) {
+            error_log('AuthController::writeAudit failed: ' . $e->getMessage());
+        }
     }
 }
