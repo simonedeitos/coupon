@@ -191,6 +191,9 @@ final class AnalyticsRepository
             $endCustom = DateTimeImmutable::createFromFormat('Y-m-d', $endInput) ?: $today;
             $start = $startCustom <= $endCustom ? $startCustom : $endCustom;
             $end = $endCustom >= $startCustom ? $endCustom : $startCustom;
+            if ($end->diff($start)->days > 59) {
+                $end = $start->modify('+59 day');
+            }
         } else {
             $preset = '30d';
             $start = $today->modify('-29 day');

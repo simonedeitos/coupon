@@ -29,7 +29,7 @@ final class AuthController
         }
         app('auth')->clearRateLimit($key);
         clear_old_input();
-        $this->writeAudit('login', 'users', app('auth')->user()['id'] ?? null, ['username' => $username]);
+        $this->writeAudit('login', 'users', app('auth')->user()['id'] ?? null, ['username' => $username], app('auth')->user()['id'] ?? null);
         app('cache')->appendJsonLine('logs', 'audit.log', ['action' => 'login', 'actor' => $username, 'created_at' => date('c')]);
         flash('success', 'Accesso effettuato con successo.');
         return redirect('/admin/dashboard');
@@ -38,20 +38,20 @@ final class AuthController
     public function logout(): array
     {
         $user = app('auth')->user();
-        $this->writeAudit('logout', 'users', $user['id'] ?? null, ['username' => $user['username'] ?? 'guest']);
+        $this->writeAudit('logout', 'users', $user['id'] ?? null, ['username' => $user['username'] ?? 'guest'], $user['id'] ?? null);
         app('cache')->appendJsonLine('logs', 'audit.log', ['action' => 'logout', 'actor' => $user['username'] ?? 'guest', 'created_at' => date('c')]);
         app('auth')->logout();
         flash('success', 'Sessione terminata.');
         return redirect('/admin');
     }
 
-    private function writeAudit(string $action, string $entityType, ?int $entityId, array $payload = []): void
+    private function writeAudit(string $action, string $entityType, ?int $entityId, array $payload = [], ?int $actorId = null): void
     {
         $db = app('db');
         if ($db === null) {
             return;
         }
-        $actorId = app('auth')->user()['id'] ?? $entityId;
+        $actorId = $actorId ?? (app('auth')->user()['id'] ?? $entityId);
         try {
             $db->prepare(
                 'INSERT INTO audit_logs (user_id, action, entity_type, entity_id, ip_address, payload, created_at)
