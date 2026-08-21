@@ -50,14 +50,14 @@ final class TradeDoublerImportService
                 continue;
             }
 
-            $programId = (string) self::field($item, ['programId'], '');
+            $programId = (string) self::nestedField($item, ['program.id', 'programId', 'advertiser.id'], '');
             if ($programId === '' || $websiteId === '') {
                 continue;
             }
 
             $trackingUrl = 'https://clk.tradedoubler.com/click?p=' . rawurlencode($programId) . '&a=' . rawurlencode((string) $websiteId);
 
-            $deeplink = (string) self::field($item, ['landingUrl', 'deepLink', 'productUrl', 'url'], '');
+            $deeplink = (string) self::nestedField($item, ['landingUrl', 'deepLink', 'productUrl', 'url'], '');
             if ($deeplink !== '') {
                 $trackingUrl .= '&url=' . rawurlencode($deeplink);
             }
@@ -127,6 +127,33 @@ final class TradeDoublerImportService
         return $default;
     }
 
+    /**
+     * Legge un campo dalla struttura nested usando dot-notation.
+     * Es: nestedField($item, 'program.logoUrl') legge $item['program']['logoUrl']
+     * Supporta anche array piatti (fallback a field() se non c'è punto).
+     */
+    private static function nestedField(array $item, array $dotKeys, $default = null)
+    {
+        foreach ($dotKeys as $dotKey) {
+            if (!str_contains($dotKey, '.')) {
+                // campo flat
+                $val = $item[$dotKey] ?? null;
+                if ($val !== null && $val !== '' && !is_array($val)) {
+                    return $val;
+                }
+                continue;
+            }
+            [$parent, $child] = explode('.', $dotKey, 2);
+            if (isset($item[$parent]) && is_array($item[$parent])) {
+                $val = $item[$parent][$child] ?? null;
+                if ($val !== null && $val !== '' && !is_array($val)) {
+                    return $val;
+                }
+            }
+        }
+        return $default;
+    }
+
     private static function toMysqlDate($raw): ?string
     {
         if ($raw === null || $raw === '') {
@@ -139,23 +166,6 @@ final class TradeDoublerImportService
         }
         $ts = strtotime((string) $raw);
         return $ts !== false ? date('Y-m-d H:i:s', $ts) : null;
-    }
-
-    private static function formatDiscount($raw): ?string
-    {
-        if ($raw === null || $raw === '') {
-            return null;
-        }
-        if (is_numeric($raw)) {
-            $num = (float) $raw;
-            if ($num > 0 && $num <= 1) {
-                $percent = round($num * 100, 2);
-                $formatted = rtrim(rtrim((string) $percent, '0'), '.');
-                return $formatted . '%';
-            }
-            return (string) $raw . '%';
-        }
-        return (string) $raw;
     }
 
     /**
@@ -179,21 +189,45 @@ final class TradeDoublerImportService
 
         foreach ($items as $item) {
             try {
-                $externalId = (string) self::field($item, ['voucherId', 'productId', 'id'], '');
-                $programId = (string) self::field($item, ['programId'], '');
-                $programName = (string) self::field($item, ['programName', 'program', 'advertiserName'], 'Store senza nome');
-                $title = (string) self::field($item, ['title', 'name'], $programName);
-                $description = (string) self::field($item, ['description', 'shortDescription'], '');
-                $code = (string) self::field($item, ['code', 'voucherCode'], '');
-                $discountRaw = self::field($item, ['discount', 'discountAmount', 'value', 'discountValue', 'discountText'], null);
-                $discountType = self::detectDiscountType($item, $discountRaw);
-                $discount = self::formatDiscountValue($discountRaw, $discountType);
-                $url = (string) self::field($item, ['trackingUrl', 'clickUrl', 'deepLink', 'link', 'url'], '');
-                $startDate = self::toMysqlDate(self::field($item, ['startDate', 'validFrom', 'start']));
-                $endDate = self::toMysqlDate(self::field($item, ['endDate', 'validTo', 'end']));
-                $categoryName = (string) self::field($item, ['categoryName', 'category'], '');
-                $logoUrl = (string) self::field($item, ['logoUrl', 'imageUrl', 'logo', 'programLogoUrl'], '');
-                $storeDescription = (string) self::field($item, ['programDescription', 'advertiserDescription', 'description'], '');
+                $externalId     = (string) self::field($item, ['voucherId', 'productId', 'id'], '');
+                $title          = (string) self::nestedField($item, ['title', 'name'], '');
+
+                // Dati programma/negozio — legge prima da oggetto nested, poi flat
+                $programId      = (string) self::nestedField($item, ['program.id', 'programId', 'advertiser.id', 'advertiserID'], '');
+                $programName    = (string) self::nestedField($item, [
+                    'program.name', 'programName', 'advertiser.name', 'advertiserName', 'merchant.name',
+                ], 'Store senza nome');
+
+                // Logo negozio
+                $logoUrl        = (string) self::nestedField($item, [
+                    'program.logoUrl', 'program.logo', 'program.imageUrl',
+                    'advertiser.logoUrl', 'advertiser.logo',
+                    'logoUrl', 'advertiserLogoUrl', 'programLogo', 'imageUrl', 'logo',
+                ], '');
+
+                // Descrizione BREVE negozio (non usare description dell'offerta per il negozio)
+                $storeDescription = (string) self::nestedField($item, [
+                    'program.description', 'program.shortDescription',
+                    'advertiser.description', 'advertiser.shortDescription',
+                    'programDescription', 'advertiserDescription',
+                ], '');
+
+                // Categoria
+                $categoryName   = (string) self::nestedField($item, [
+                    'program.categoryName', 'program.category',
+                    'advertiser.categoryName', 'advertiser.category',
+                    'categoryName', 'category', 'category.name',
+                ], '');
+
+                // Dati offerta
+                $description    = (string) self::field($item, ['description', 'shortDescription'], '');
+                $code           = (string) self::field($item, ['code', 'voucherCode'], '');
+                $url            = (string) self::field($item, ['trackingUrl', 'clickUrl', 'deepLink', 'link', 'url'], '');
+                $startDate      = self::toMysqlDate(self::field($item, ['startDate', 'validFrom', 'start']));
+                $endDate        = self::toMysqlDate(self::field($item, ['endDate', 'validTo', 'end']));
+
+                // Sconto — usa il nuovo parseDiscount con il titolo per interpretazione simbolo
+                $discount       = self::parseDiscount($item, $title);
 
                 if ($externalId === '' || $url === '') {
                     $errors++;
@@ -221,9 +255,12 @@ final class TradeDoublerImportService
 
                 $insertOffer = $this->db->prepare(
                     'INSERT INTO offers
-                        (store_id, category_id, title, slug, description, offer_type, coupon_code, affiliate_url, external_id, dedupe_hash, status, badge, discount_type, starts_at, expires_at, is_featured)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'ACTIVE\', ?, ?, ?, ?, ?)'
+                       (store_id, category_id, title, slug, description, offer_type, coupon_code,
+                        affiliate_url, external_id, dedupe_hash, status, badge,
+                        discount_type, discount_value, starts_at, expires_at, is_featured)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'ACTIVE\', ?, ?, ?, ?, ?, ?)'
                 );
+                $discountBadge = $discount['value'] !== null ? (string) $discount['value'] : null;
                 $insertOffer->execute([
                     $storeId,
                     $categoryId,
@@ -235,8 +272,9 @@ final class TradeDoublerImportService
                     $url,
                     $externalId,
                     $hash,
-                    $discount,
-                    $discountType,
+                    $discountBadge,
+                    $discount['type'],
+                    $discount['value'],
                     $startDate,
                     $endDate,
                     $markFeatured ? 1 : 0,
@@ -331,66 +369,125 @@ final class TradeDoublerImportService
     }
 
     /**
-     * Detecta il tipo di sconto dall'item del feed.
-     * Restituisce 'PERCENT' o 'AMOUNT'.
+     * Analizza lo sconto dall'item TradeDoubler.
+     * Restituisce ['type' => 'PERCENT'|'AMOUNT'|'NONE', 'value' => float|null]
+     *
+     * Priorità:
+     * 1. Struttura nested ufficiale: discount.type + discount.value
+     * 2. Campi flat strutturati (discountPercent, discountAmount, ecc.)
+     * 3. Campo testuale con simbolo esplicito (%, €)
+     * 4. Lettura del simbolo dal titolo dell'offerta
+     * 5. NONE se non determinabile
      */
-    private static function detectDiscountType(array $item, $raw): string
+    private static function parseDiscount(array $item, string $title = ''): array
     {
-        // Se il feed fornisce esplicitamente il tipo
-        $type = strtoupper((string) self::field($item, ['discountType', 'valueType', 'type', 'discountUnit'], ''));
-        if (in_array($type, ['PERCENT', 'PERCENTAGE', '%'], true)) {
-            return 'PERCENT';
-        }
-        if (in_array($type, ['AMOUNT', 'FIXED', 'EUR', 'EURO', '€'], true)) {
-            return 'AMOUNT';
-        }
+        // ── STEP 1: struttura nested ufficiale { "discount": { "type": "...", "value": ... } } ──
+        $discountObj = $item['discount'] ?? null;
+        if (is_array($discountObj)) {
+            $dtype  = strtolower(trim((string) ($discountObj['type'] ?? '')));
+            $dvalue = isset($discountObj['value']) && is_numeric($discountObj['value'])
+                ? (float) $discountObj['value']
+                : null;
 
-        // Controlla se il valore raw contiene simboli espliciti
-        $rawStr = (string) $raw;
-        if (str_contains($rawStr, '€') || str_contains($rawStr, 'EUR')) {
-            return 'AMOUNT';
-        }
-        if (str_contains($rawStr, '%')) {
-            return 'PERCENT';
-        }
-
-        // Euristico: se è un numero e supera 90, è quasi certamente un importo fisso, non una percentuale
-        if (is_numeric($raw)) {
-            $num = (float) $raw;
-            if ($num > 90) {
-                return 'AMOUNT';
+            if ($dvalue !== null && $dvalue > 0) {
+                // Converti frazione decimale (0.20 → 20%)
+                if (in_array($dtype, ['percentage', 'percent', 'pct'], true)) {
+                    if ($dvalue <= 1.0) { $dvalue = round($dvalue * 100, 2); }
+                    return ['type' => 'PERCENT', 'value' => round($dvalue, 2)];
+                }
+                if (in_array($dtype, ['amount', 'fixed', 'fixedamount', 'cash', 'currency', 'eur', 'euro'], true)) {
+                    return ['type' => 'AMOUNT', 'value' => round($dvalue, 2)];
+                }
+                // Tipo presente ma non riconosciuto: tenta simbolo nel titolo
+                if (str_contains($title, '%')) {
+                    if ($dvalue <= 1.0) { $dvalue = round($dvalue * 100, 2); }
+                    return ['type' => 'PERCENT', 'value' => round($dvalue, 2)];
+                }
+                if (preg_match('/€|\bEUR\b|\beuro\b/i', $title)) {
+                    return ['type' => 'AMOUNT', 'value' => round($dvalue, 2)];
+                }
             }
         }
 
-        return 'PERCENT';
-    }
+        // ── STEP 2: campi flat strutturati PERCENT ──
+        $percentRaw = self::field($item, [
+            'discountPercent', 'discountPercentage', 'percentOff', 'discountRate', 'percent',
+        ], null);
+        if ($percentRaw !== null && is_numeric($percentRaw)) {
+            $v = (float) $percentRaw;
+            if ($v > 0) {
+                if ($v <= 1.0) { $v = round($v * 100, 2); }
+                return ['type' => 'PERCENT', 'value' => round($v, 2)];
+            }
+        }
 
-    private static function formatDiscountValue($raw, string $discountType): ?string
-    {
-        if ($raw === null || $raw === '') {
-            return null;
+        // ── STEP 3: campi flat strutturati AMOUNT ──
+        $amountRaw = self::field($item, [
+            'discountAmount', 'amountOff', 'fixedDiscount', 'savingAmount', 'saving',
+        ], null);
+        if ($amountRaw !== null && is_numeric($amountRaw)) {
+            $v = (float) $amountRaw;
+            if ($v > 0) {
+                return ['type' => 'AMOUNT', 'value' => round($v, 2)];
+            }
         }
-        if (is_numeric($raw)) {
-            $num = (float) $raw;
-            if ($num <= 0) {
-                return null;
+
+        // ── STEP 4: campo testuale/numerico generico con simbolo ──
+        // Usa il campo flat "discount" solo se è stringa o numero (non array, già gestito)
+        $discountFlat = $item['discount'] ?? null;
+        $fallbackSources = [
+            self::field($item, ['discountText', 'savingText', 'offerText'], null),
+            (is_string($discountFlat) || is_numeric($discountFlat)) ? $discountFlat : null,
+        ];
+
+        foreach ($fallbackSources as $raw) {
+            if ($raw === null) { continue; }
+            $rawStr = (string) $raw;
+            $num = null;
+            if (is_numeric($raw)) {
+                $num = (float) $raw;
+            } else {
+                $clean = preg_replace('/[^0-9.,\-]/', '', $rawStr);
+                $clean = str_replace(',', '.', $clean ?? '');
+                if (is_numeric($clean)) { $num = (float) $clean; }
             }
-            if ($num > 0 && $num <= 1 && $discountType === 'PERCENT') {
-                $percent = round($num * 100, 2);
-                $formatted = rtrim(number_format($percent, 2, '.', ''), '0');
-                $formatted = rtrim($formatted, '.');
-                return $formatted . '%';
+            if ($num === null || $num <= 0) { continue; }
+
+            if (str_contains($rawStr, '%')) {
+                return ['type' => 'PERCENT', 'value' => round($num, 2)];
             }
-            if ($discountType === 'AMOUNT') {
-                $formatted = rtrim(number_format($num, 2, '.', ''), '0');
-                return rtrim($formatted, '.');
+            if (preg_match('/€|\bEUR\b|\beuro\b/i', $rawStr)) {
+                return ['type' => 'AMOUNT', 'value' => round($num, 2)];
             }
-            $formatted = rtrim(number_format($num, 2, '.', ''), '0');
-            return rtrim($formatted, '.') . '%';
+
+            // ── STEP 5: simbolo dal TITOLO ──
+            if ($title !== '') {
+                if (str_contains($title, '%')) {
+                    return ['type' => 'PERCENT', 'value' => round($num, 2)];
+                }
+                if (preg_match('/€|\bEUR\b|\beuro\b/i', $title)) {
+                    return ['type' => 'AMOUNT', 'value' => round($num, 2)];
+                }
+            }
         }
-        // Rimuovi simboli per estrarre il valore numerico
-        $clean = trim(str_replace(['€', 'EUR', '%', ' '], '', (string) $raw));
-        return $clean !== '' ? (string) $raw : null;
+
+        if ($title !== '') {
+            $clean = preg_replace('/[^0-9.,\-]/', '', $title);
+            $clean = str_replace(',', '.', $clean ?? '');
+            if (is_numeric($clean)) {
+                $num = (float) $clean;
+                if ($num > 0) {
+                    if (str_contains($title, '%')) {
+                        return ['type' => 'PERCENT', 'value' => round($num, 2)];
+                    }
+                    if (preg_match('/€|\bEUR\b|\beuro\b/i', $title)) {
+                        return ['type' => 'AMOUNT', 'value' => round($num, 2)];
+                    }
+                }
+            }
+        }
+
+        return ['type' => 'NONE', 'value' => null];
     }
 
     /**

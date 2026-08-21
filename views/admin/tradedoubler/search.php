@@ -5,6 +5,16 @@
  */
 function td_field(array $item, array $keys, $default = '—') {
     foreach ($keys as $key) {
+        if (str_contains($key, '.')) {
+            [$parent, $child] = explode('.', $key, 2);
+            if (isset($item[$parent]) && is_array($item[$parent])) {
+                $val = $item[$parent][$child] ?? null;
+                if ($val !== '' && $val !== null && !is_array($val)) {
+                    return $val;
+                }
+            }
+            continue;
+        }
         if (isset($item[$key]) && $item[$key] !== '' && $item[$key] !== null) {
             return $item[$key];
         }
@@ -32,18 +42,61 @@ function td_date(array $item, array $keys): string {
  * TradeDoubler restituisce spesso il valore come frazione decimale (0.1 = 10%).
  */
 function td_discount(array $item): string {
-    $raw = td_field($item, ['discount', 'discountAmount', 'value', 'discountValue', 'discountText'], null);
-    if ($raw === null) {
-        return '—';
+    // Priorità 1: struttura nested ufficiale { "discount": { "type": "...", "value": ... } }
+    $discountObj = $item['discount'] ?? null;
+    if (is_array($discountObj)) {
+        $dtype  = strtolower(trim((string) ($discountObj['type'] ?? '')));
+        $dvalue = isset($discountObj['value']) && is_numeric($discountObj['value'])
+            ? (float) $discountObj['value']
+            : null;
+        if ($dvalue !== null && $dvalue > 0) {
+            // Converti frazione se necessario
+            if (in_array($dtype, ['percentage', 'percent', 'pct'], true) && $dvalue <= 1.0) {
+                $dvalue = round($dvalue * 100, 2);
+            }
+            $formatted = rtrim(rtrim(number_format($dvalue, 2, '.', ''), '0'), '.');
+            if (in_array($dtype, ['percentage', 'percent', 'pct'], true)) {
+                return $formatted . '%';
+            }
+            if (in_array($dtype, ['amount', 'fixed', 'fixedamount', 'cash', 'currency', 'eur', 'euro'], true)) {
+                return $formatted . '€';
+            }
+            // Tipo non riconosciuto: guarda il titolo
+            $title = (string) td_field($item, ['title', 'name'], '');
+            if (str_contains($title, '%')) { return $formatted . '%'; }
+            if (preg_match('/€|\bEUR\b|\beuro\b/i', $title)) { return $formatted . '€'; }
+            return $formatted; // valore senza simbolo
+        }
     }
+
+    // Priorità 2: campo "discount" come stringa/numero flat
+    $discountFlat = $item['discount'] ?? null;
+    $raw = (is_string($discountFlat) || is_numeric($discountFlat))
+        ? $discountFlat
+        : td_field($item, ['discountPercent', 'discountAmount', 'discountText', 'savingText'], null);
+
+    if ($raw === null) { return '—'; }
+
+    $title = (string) td_field($item, ['title', 'name'], '');
+
     if (is_numeric($raw)) {
         $num = (float) $raw;
+        if ($num <= 0) { return '—'; }
+        // Frazione decimale → percentuale
         if ($num > 0 && $num <= 1) {
-            $percent = round($num * 100, 2);
-            return rtrim(rtrim((string) $percent, '0'), '.') . '%';
+            return rtrim(rtrim((string) round($num * 100, 2), '0'), '.') . '%';
         }
-        return (string) $raw . '%';
+        // Guarda simbolo nel testo raw o nel titolo
+        $rawStr = (string) $raw;
+        if (str_contains($rawStr, '%') || str_contains($title, '%')) {
+            return rtrim(rtrim((string) $num, '0'), '.') . '%';
+        }
+        if (preg_match('/€|\bEUR\b|\beuro\b/i', $rawStr) || preg_match('/€|\bEUR\b|\beuro\b/i', $title)) {
+            return rtrim(rtrim((string) $num, '0'), '.') . '€';
+        }
+        return rtrim(rtrim((string) $num, '0'), '.'); // nessun simbolo determinabile
     }
+
     return (string) $raw;
 }
 ?>
@@ -109,6 +162,8 @@ function td_discount(array $item): string {
                                 <th>Negozio</th>
                                 <th>Titolo</th>
                                 <?php if ($system === 'VOUCHERS'): ?>
+                                    <th>Logo</th>
+                                    <th>Categoria</th>
                                     <th>Codice</th>
                                     <th>Sconto</th>
                                     <th>Valido da</th>
@@ -136,9 +191,18 @@ function td_discount(array $item): string {
                                         <span class="badge" style="background:#eee;color:#555;padding:3px 10px;border-radius:999px;font-size:12px;white-space:nowrap;">Nuovo</span>
                                     <?php endif; ?>
                                 </td>
-                                <td><?php echo e((string) td_field($item, ['programName', 'program', 'advertiserName'])); ?></td>
+                                <td><?php echo e((string) td_field($item, ['program.name', 'programName', 'advertiser.name', 'advertiserName', 'merchant.name'])); ?></td>
                                 <td><?php echo e((string) td_field($item, ['title', 'name'])); ?></td>
                                 <?php if ($system === 'VOUCHERS'): ?>
+                                    <td>
+                                        <?php $logo = (string) td_field($item, ['program.logoUrl', 'logoUrl', 'advertiserLogoUrl'], ''); ?>
+                                        <?php if ($logo !== ''): ?>
+                                            <img src="<?php echo e($logo); ?>" style="height:24px;max-width:60px;object-fit:contain;" loading="lazy">
+                                        <?php else: ?>
+                                            —
+                                        <?php endif; ?>
+                                    </td>
+                                    <td><?php echo e((string) td_field($item, ['program.categoryName', 'categoryName', 'category', 'category.name'])); ?></td>
                                     <td><?php echo e((string) td_field($item, ['code', 'voucherCode'])); ?></td>
                                     <td><?php echo e(td_discount($item)); ?></td>
                                     <td><?php echo e(td_date($item, ['startDate', 'validFrom', 'start'])); ?></td>
