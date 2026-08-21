@@ -120,8 +120,12 @@ final class TradeDoublerClient
             ?? (array_is_list($data) ? $data : []);
 
         if (empty($items)) {
-            error_log('[TradeDoubler] Response keys for ' . $responseKey . ': ' . implode(', ', array_keys($data)));
-            error_log('[TradeDoubler] First 500 chars: ' . substr((string) json_encode($data), 0, 500));
+            $safeResponseKey = preg_replace('/[^a-z0-9_-]/i', '_', $responseKey) ?? 'items';
+            $wrappers = [];
+            foreach (['data', 'response', 'result'] as $wrapperKey) {
+                $wrappers[] = $wrapperKey . ':' . ((isset($data[$wrapperKey]) && is_array($data[$wrapperKey])) ? 'array' : 'missing');
+            }
+            error_log('[TradeDoubler] Empty ' . $safeResponseKey . ' payload. root=' . (array_is_list($data) ? 'list' : 'assoc') . '; wrappers=' . implode(', ', $wrappers));
         }
 
         return ['vouchers' => array_values($items), 'error' => null];

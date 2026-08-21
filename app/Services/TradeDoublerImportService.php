@@ -223,7 +223,7 @@ final class TradeDoublerImportService
             $dvalue = isset($discountObj['value']) ? self::toDecimal($discountObj['value']) : null;
             if ($dvalue !== null && $dvalue > 0) {
                 if (in_array($dtype, ['percentage', 'percent', 'pct', '%'], true)) {
-                    if ($dvalue > 0 && $dvalue <= 1) {
+                    if ($dvalue <= 1) {
                         $dvalue *= 100;
                     }
                     return ['type' => 'PERCENT', 'value' => round($dvalue, 2)];
@@ -249,7 +249,7 @@ final class TradeDoublerImportService
         ]);
         $percentValue = self::toDecimal($percentRaw);
         if ($percentValue !== null && $percentValue > 0) {
-            if ($percentValue > 0 && $percentValue <= 1) {
+            if ($percentValue <= 1) {
                 $percentValue *= 100;
             }
             return ['type' => 'PERCENT', 'value' => round($percentValue, 2)];
@@ -269,6 +269,7 @@ final class TradeDoublerImportService
             self::field($item, ['discountText', 'savingText', 'offerText', 'value']),
         ];
 
+        $anyValue = null;
         foreach ($fallbackCandidates as $rawCandidate) {
             if ($rawCandidate === null) {
                 continue;
@@ -279,6 +280,9 @@ final class TradeDoublerImportService
             if ($numeric === null || $numeric <= 0) {
                 continue;
             }
+            if ($anyValue === null) {
+                $anyValue = $numeric;
+            }
 
             if (str_contains($text, '%')) {
                 return ['type' => 'PERCENT', 'value' => round($numeric, 2)];
@@ -288,15 +292,6 @@ final class TradeDoublerImportService
             }
         }
 
-        $anyValue = null;
-        foreach ($fallbackCandidates as $rawCandidate) {
-            if ($rawCandidate !== null) {
-                $anyValue = self::toDecimal($rawCandidate);
-                if ($anyValue !== null && $anyValue > 0) {
-                    break;
-                }
-            }
-        }
         if ($anyValue !== null && $anyValue > 0) {
             if (str_contains($title, '%')) {
                 return ['type' => 'PERCENT', 'value' => round($anyValue, 2)];
